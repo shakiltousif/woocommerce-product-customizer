@@ -1,0 +1,44 @@
+# WordPress
+wp-config.php
+wp-config-sample.php
+wp-content/uploads/
+wp-content/cache/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+wp-content/backups/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/upgrade-temp-backup/
+wp-content/uploads/
+wp-content/wp-multisite/
+
+# Plugin specific
+*.log
+debug.log
+error_log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node modules (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Composer
+vendor/
+composer.lock
+
+# Test files (optional - remove if you want to include them)
+test-*.php
+debug-*.js

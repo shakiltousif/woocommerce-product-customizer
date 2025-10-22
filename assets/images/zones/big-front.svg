@@ -1,0 +1,20 @@
+<svg width="120" height="140" viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg">
+  <!-- T-shirt silhouette -->
+  <path d="M20 20 L20 40 C20 45, 25 50, 30 50 L90 50 C95 50, 100 45, 100 40 L100 20 C100 15, 95 10, 90 10 L30 10 C25 10, 20 15, 20 20 Z" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+  
+  <!-- Sleeves -->
+  <path d="M10 30 L20 30 C20 35, 15 40, 10 40 Z" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+  <path d="M100 30 L110 30 C110 35, 115 40, 110 40 Z" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+  
+  <!-- Body -->
+  <rect x="20" y="50" width="80" height="80" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+  
+  <!-- Big Front position highlight -->
+  <rect x="30" y="25" width="60" height="35" fill="#007cba" opacity="0.3" stroke="#007cba" stroke-width="2" rx="2"/>
+  
+  <!-- Position indicator -->
+  <circle cx="60" cy="42" r="3" fill="#007cba"/>
+  
+  <!-- Text -->
+  <text x="60" y="130" font-family="Arial, sans-serif" font-size="12" fill="#333" text-anchor="middle" font-weight="600">Big Front</text>
+</svg>

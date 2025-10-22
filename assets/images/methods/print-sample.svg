@@ -1,0 +1,19 @@
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Print/Printer Icon -->
+  <rect x="15" y="15" width="50" height="35" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2" rx="3"/>
+  
+  <!-- Paper tray -->
+  <rect x="20" y="50" width="40" height="8" fill="#e9ecef" stroke="#dee2e6" stroke-width="1" rx="2"/>
+  
+  <!-- Print head -->
+  <rect x="25" y="20" width="30" height="8" fill="#007cba" rx="2"/>
+  
+  <!-- Ink cartridges -->
+  <rect x="20" y="30" width="8" height="12" fill="#dc3545" rx="1"/>
+  <rect x="30" y="30" width="8" height="12" fill="#28a745" rx="1"/>
+  <rect x="40" y="30" width="8" height="12" fill="#ffc107" rx="1"/>
+  <rect x="50" y="30" width="8" height="12" fill="#6f42c1" rx="1"/>
+  
+  <!-- Text -->
+  <text x="40" y="75" font-family="Arial, sans-serif" font-size="10" fill="#666" text-anchor="middle">Print</text>
+</svg>
