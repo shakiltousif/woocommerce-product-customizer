@@ -246,8 +246,29 @@ class WC_Product_Customizer_Cart_Integration {
      * @return bool
      */
     private function is_customization_enabled($product_id) {
+        // Check if customization is enabled
         $enabled = get_post_meta($product_id, '_customization_enabled', true);
-        return $enabled === 'yes' || $enabled === '1' || $enabled === 1;
+        if ($enabled !== 'yes' && $enabled !== '1' && $enabled != 1) {
+            return false;
+        }
+        
+        // Check if product has a valid category configuration
+        $db = WC_Product_Customizer_Database::get_instance();
+        $config = $db->get_product_customization_config($product_id);
+        
+        if (!$config || !$config->enabled) {
+            return false;
+        }
+        
+        // Check if config has at least one zone and one type
+        $zones = maybe_unserialize($config->available_zones);
+        $types = maybe_unserialize($config->available_types);
+        
+        if (empty($zones) || !is_array($zones) || empty($types) || !is_array($types)) {
+            return false;
+        }
+        
+        return true;
     }
 
     /**

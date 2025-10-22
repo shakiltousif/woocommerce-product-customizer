@@ -63,24 +63,75 @@ class WC_Product_Customizer_Pricing {
      * Load pricing data from settings and database
      */
     private function load_pricing_data() {
-        // Load setup fees from settings
-        $settings = get_option('wc_product_customizer_settings', array());
-        $this->setup_fees = $settings['setup_fees'] ?? array(
-            'text_embroidery' => 4.95,
-            'text_print' => 4.95,
-            'logo_embroidery' => 8.95,
-            'logo_print' => 8.95
-        );
+        // Load setup fees from customization types
+        $this->setup_fees = $this->get_cached_setup_fees();
 
-        // Load pricing tiers from database
-        $db = WC_Product_Customizer_Database::get_instance();
-        $embroidery_tiers = $db->get_pricing_tiers('embroidery');
-        $print_tiers = $db->get_pricing_tiers('print');
+        // Load pricing tiers from database with caching
+        $this->pricing_tiers = $this->get_cached_pricing_tiers();
+    }
 
-        $this->pricing_tiers = array(
-            'embroidery' => $embroidery_tiers,
-            'print' => $print_tiers
-        );
+    /**
+     * Get cached pricing tiers or load from database
+     *
+     * @return array
+     */
+    private function get_cached_pricing_tiers() {
+        $cache_key = 'wc_customizer_pricing_tiers';
+        $cached_tiers = get_transient($cache_key);
+        
+        if (false === $cached_tiers) {
+            // Cache miss - load from database
+            $db = WC_Product_Customizer_Database::get_instance();
+            $embroidery_tiers = $db->get_pricing_tiers('embroidery');
+            $print_tiers = $db->get_pricing_tiers('print');
+            
+            $cached_tiers = array(
+                'embroidery' => $embroidery_tiers,
+                'print' => $print_tiers
+            );
+            
+            // Cache for 5 minutes
+            set_transient($cache_key, $cached_tiers, 5 * MINUTE_IN_SECONDS);
+        }
+        
+        return $cached_tiers;
+    }
+
+    /**
+     * Get cached setup fees or load from customization types
+     *
+     * @return array
+     */
+    private function get_cached_setup_fees() {
+        $cache_key = 'wc_customizer_setup_fees';
+        $cached_fees = get_transient($cache_key);
+        
+        if (false === $cached_fees) {
+            // Cache miss - load from customization types
+            $db = WC_Product_Customizer_Database::get_instance();
+            $types = $db->get_all_customization_types(true); // Only active types
+            
+            $cached_fees = array();
+            foreach ($types as $type) {
+                $cached_fees[$type->slug . '_text'] = floatval($type->text_setup_fee);
+                $cached_fees[$type->slug . '_logo'] = floatval($type->logo_setup_fee);
+            }
+            
+            // Cache for 5 minutes
+            set_transient($cache_key, $cached_fees, 5 * MINUTE_IN_SECONDS);
+        }
+        
+        return $cached_fees;
+    }
+
+    /**
+     * Clear pricing cache
+     */
+    public function clear_pricing_cache() {
+        delete_transient('wc_customizer_pricing_tiers');
+        delete_transient('wc_customizer_setup_fees');
+        $this->pricing_tiers = $this->get_cached_pricing_tiers();
+        $this->setup_fees = $this->get_cached_setup_fees();
     }
 
     /**
@@ -160,11 +211,15 @@ class WC_Product_Customizer_Pricing {
      * @return float
      */
     public function get_application_cost($method, $quantity) {
-        if (!isset($this->pricing_tiers[$method])) {
+        // Find the pricing tier for this method and quantity
+        $db = WC_Product_Customizer_Database::get_instance();
+        $type = $db->get_customization_type_by_slug($method);
+        
+        if (!$type) {
             return 0;
         }
-
-        $tiers = $this->pricing_tiers[$method];
+        
+        $tiers = $db->get_pricing_tiers_by_type_id($type->id);
         
         foreach ($tiers as $tier) {
             if ($quantity >= $tier->min_quantity && $quantity <= $tier->max_quantity) {
@@ -377,7 +432,13 @@ class WC_Product_Customizer_Pricing {
             wp_send_json_error(array('message' => __('Invalid customization data', 'wc-product-customizer')));
         }
 
+        // Clear cache to ensure fresh pricing data
+        $this->clear_pricing_cache();
+
         $pricing = $this->get_pricing_summary($customization_data, $quantity);
+        
+        // Get detailed breakdown including tier information
+        $detailed_breakdown = $this->get_detailed_pricing_breakdown($customization_data, $quantity);
         
         wp_send_json_success(array(
             'pricing' => $pricing,
@@ -385,7 +446,8 @@ class WC_Product_Customizer_Pricing {
                 'setup_fee' => '£' . number_format($this->get_setup_fee($customization_data['method'], $customization_data['content_type']), 2),
                 'application_fee' => '£' . number_format($this->get_application_cost($customization_data['method'], $quantity), 2),
                 'total' => '£' . number_format($pricing['total'], 2)
-            )
+            ),
+            'detailed_breakdown' => $detailed_breakdown
         ));
     }
 
@@ -411,6 +473,63 @@ class WC_Product_Customizer_Pricing {
         }
         
         return $sanitized;
+    }
+
+    /**
+     * Get detailed pricing breakdown with tier information
+     *
+     * @param array $customization_data
+     * @param int $quantity
+     * @return array
+     */
+    private function get_detailed_pricing_breakdown($customization_data, $quantity) {
+        $breakdown = array();
+        
+        if (isset($customization_data['method']) && isset($customization_data['content_type'])) {
+            $method = $customization_data['method'];
+            $content_type = $customization_data['content_type'];
+            
+            $tier = $this->get_pricing_tier_for_quantity($method, $quantity);
+            
+            if ($tier) {
+                $setup_fee = $this->get_setup_fee($method, $content_type);
+                $application_cost = $this->get_application_cost($method, $quantity);
+                
+                $breakdown[] = array(
+                    'method' => $method,
+                    'content_type' => $content_type,
+                    'quantity' => $quantity,
+                    'tier_range' => $tier->min_quantity . ' - ' . ($tier->max_quantity == 999999 ? '∞' : $tier->max_quantity),
+                    'price_per_item' => $tier->price_per_item,
+                    'total_application_cost' => $application_cost,
+                    'setup_fee' => $setup_fee,
+                    'total_cost' => $setup_fee + $application_cost
+                );
+            }
+        }
+        
+        return $breakdown;
+    }
+
+    /**
+     * Get pricing tier for specific quantity and method
+     *
+     * @param string $method
+     * @param int $quantity
+     * @return object|null
+     */
+    private function get_pricing_tier_for_quantity($method, $quantity) {
+        if (!isset($this->pricing_tiers[$method])) {
+            return null;
+        }
+        
+        foreach ($this->pricing_tiers[$method] as $tier) {
+            if ($quantity >= $tier->min_quantity && $quantity <= $tier->max_quantity) {
+                return $tier;
+            }
+        }
+        
+        return null;
     }
 
     /**

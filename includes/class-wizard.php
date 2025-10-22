@@ -376,7 +376,29 @@ class WC_Product_Customizer_Wizard {
         }
         
         $db = WC_Product_Customizer_Database::get_instance();
-        $zones = $db->get_customization_zones();
+        
+        // Get product's customization configuration
+        $config = $db->get_product_customization_config($product_id);
+        
+        if ($config) {
+            // Filter zones based on category configuration
+            $allowed_zone_ids = maybe_unserialize($config->available_zones);
+            if (is_array($allowed_zone_ids) && !empty($allowed_zone_ids)) {
+                $zones = $db->get_zones_by_ids($allowed_zone_ids);
+            } else {
+                // Configuration exists but has no zones - return error
+                wp_send_json_error(array(
+                    'message' => __('No customization zones are available for this product. Please contact the store administrator.', 'wc-product-customizer'),
+                    'code' => 'no_zones_configured'
+                ));
+            }
+        } else {
+            // No configuration found - return error
+            wp_send_json_error(array(
+                'message' => __('This product does not support customization. Please contact the store administrator.', 'wc-product-customizer'),
+                'code' => 'no_configuration'
+            ));
+        }
         
         // Filter zones based on product compatibility if needed
         $available_zones = array();
@@ -386,7 +408,9 @@ class WC_Product_Customizer_Wizard {
                 'name' => $zone->name,
                 'group' => $zone->zone_group,
                 'methods' => explode(',', $zone->methods_available),
-                'charge' => floatval($zone->zone_charge)
+                'charge' => floatval($zone->zone_charge),
+                'thumbnail_url' => $zone->thumbnail_url,
+                'description' => $zone->description
             );
         }
         
@@ -433,16 +457,48 @@ class WC_Product_Customizer_Wizard {
             wp_send_json_error(array('message' => __('Security check failed', 'wc-product-customizer')));
         }
         
+        $product_id = intval($_POST['product_id'] ?? 0);
+        
+        if (!$product_id) {
+            wp_send_json_error(array('message' => __('Invalid product ID', 'wc-product-customizer')));
+        }
+        
         $db = WC_Product_Customizer_Database::get_instance();
-        $types = $db->get_customization_types();
+        
+        // Get product's customization configuration
+        $config = $db->get_product_customization_config($product_id);
+        
+        if ($config) {
+            // Filter types based on category configuration
+            $allowed_type_ids = maybe_unserialize($config->available_types);
+            if (is_array($allowed_type_ids) && !empty($allowed_type_ids)) {
+                $types = $db->get_types_by_ids($allowed_type_ids);
+            } else {
+                // Configuration exists but has no types - return error
+                wp_send_json_error(array(
+                    'message' => __('No customization methods are available for this product. Please contact the store administrator.', 'wc-product-customizer'),
+                    'code' => 'no_types_configured'
+                ));
+            }
+        } else {
+            // No configuration found - return error
+            wp_send_json_error(array(
+                'message' => __('This product does not support customization. Please contact the store administrator.', 'wc-product-customizer'),
+                'code' => 'no_configuration'
+            ));
+        }
         
         $methods = array();
         foreach ($types as $type) {
             $methods[] = array(
                 'id' => $type->id,
                 'name' => $type->name,
+                'slug' => $type->slug,
                 'description' => $type->description,
-                'setup_fee' => floatval($type->setup_fee)
+                'icon' => $type->icon,
+                'text_setup_fee' => floatval($type->text_setup_fee),
+                'logo_setup_fee' => floatval($type->logo_setup_fee),
+                'setup_fee' => floatval($type->text_setup_fee) // For backward compatibility
             );
         }
         
@@ -552,13 +608,25 @@ class WC_Product_Customizer_Wizard {
      */
     public function render_zone_card($zone) {
         ob_start();
+        
+        // Determine thumbnail URL - use custom thumbnail if available, otherwise fall back to default SVG
+        $thumbnail_url = '';
+        if (!empty($zone['thumbnail_url'])) {
+            $thumbnail_url = $zone['thumbnail_url'];
+        } else {
+            $thumbnail_url = WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'])) . '.svg';
+        }
         ?>
-        <div class="zone-card" data-zone-id="<?php echo esc_attr($zone['id']); ?>" data-zone-name="<?php echo esc_attr($zone['name']); ?>">
+        <div class="zone-card" data-zone-id="<?php echo esc_attr($zone['id']); ?>" data-zone-name="<?php echo esc_attr($zone['name']); ?>" title="<?php echo esc_attr($zone['description']); ?>">
             <div class="zone-image">
-                <img src="<?php echo esc_url(WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'])) . '.svg'); ?>" 
-                     alt="<?php echo esc_attr($zone['name']); ?>">
+                <img src="<?php echo esc_url($thumbnail_url); ?>" 
+                     alt="<?php echo esc_attr($zone['name']); ?>"
+                     onerror="this.src='<?php echo esc_url(WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'])) . '.svg'); ?>'">
             </div>
             <h4><?php echo esc_html($zone['name']); ?></h4>
+            <?php if (!empty($zone['description'])): ?>
+                <p class="zone-description"><?php echo esc_html($zone['description']); ?></p>
+            <?php endif; ?>
             <div class="zone-availability">
                 <?php if (in_array('print', $zone['methods'])): ?>
                     <span class="method-available print">🔥 <?php esc_html_e('Print available', 'wc-product-customizer'); ?></span>
@@ -581,23 +649,21 @@ class WC_Product_Customizer_Wizard {
     public function render_method_card($method) {
         ob_start();
         ?>
-        <div class="method-card" data-method="<?php echo esc_attr($method['name']); ?>">
+        <div class="method-card" data-method="<?php echo esc_attr($method['slug']); ?>" data-type-id="<?php echo esc_attr($method['id']); ?>">
             <div class="method-image">
-                <img src="<?php echo esc_url(WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/methods/' . $method['name'] . '-sample.jpg'); ?>" 
-                     alt="<?php echo esc_attr($method['name']); ?> Sample">
+                <div class="method-icon" style="font-size: 48px; text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <?php echo esc_html($method['icon']); ?>
+                </div>
             </div>
             <div class="method-info">
                 <h4>
-                    <?php echo esc_html(ucfirst($method['name'])); ?>
+                    <?php echo esc_html($method['name']); ?>
                     <span class="checkmark" style="display: none;">✓</span>
-                    <?php if ($method['name'] === 'print'): ?>
-                        <span class="info-icon">🔥</span>
-                    <?php endif; ?>
+                    <span class="info-icon"><?php echo esc_html($method['icon']); ?></span>
                 </h4>
-                <?php if ($method['name'] === 'embroidery'): ?>
-                    <p class="method-subtitle"><?php esc_html_e('(Stitching)', 'wc-product-customizer'); ?></p>
+                <?php if (!empty($method['description'])): ?>
+                    <p class="method-description"><?php echo esc_html($method['description']); ?></p>
                 <?php endif; ?>
-                <p class="method-description"><?php echo esc_html($method['description']); ?></p>
             </div>
         </div>
         <?php

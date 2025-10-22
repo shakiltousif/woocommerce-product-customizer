@@ -317,7 +317,23 @@
                         // Update UI after zones are rendered
                         this.updateUIAfterDataLoad();
                     } else {
-                        this.showError($grid, response.data.message || 'Failed to load zones');
+                        // Handle specific error codes
+                        const errorCode = response.data.code || 'unknown';
+                        let errorMessage = response.data.message || 'Failed to load zones';
+                        
+                        if (errorCode === 'no_zones_configured') {
+                            errorMessage = 'No customization zones are available for this product. Please contact the store administrator.';
+                        } else if (errorCode === 'no_configuration') {
+                            errorMessage = 'This product does not support customization. Please contact the store administrator.';
+                        }
+                        
+                        this.showError($grid, errorMessage);
+                        // Close the wizard if no configuration is available
+                        if (errorCode === 'no_configuration') {
+                            setTimeout(() => {
+                                this.closeWizard();
+                            }, 3000);
+                        }
                     }
                 },
                 error: (xhr, status, error) => {
@@ -417,8 +433,24 @@
                         // Update method UI after methods are rendered
                         this.updateMethodUI();
                     } else {
-                        console.error('Methods response failed:', response.data.message);
-                        this.showError($selection, response.data.message || 'Failed to load methods');
+                        // Handle specific error codes
+                        const errorCode = response.data.code || 'unknown';
+                        let errorMessage = response.data.message || 'Failed to load methods';
+                        
+                        if (errorCode === 'no_types_configured') {
+                            errorMessage = 'No customization methods are available for this product. Please contact the store administrator.';
+                        } else if (errorCode === 'no_configuration') {
+                            errorMessage = 'This product does not support customization. Please contact the store administrator.';
+                        }
+                        
+                        console.error('Methods response failed:', errorMessage);
+                        this.showError($selection, errorMessage);
+                        // Close the wizard if no configuration is available
+                        if (errorCode === 'no_configuration') {
+                            setTimeout(() => {
+                                this.closeWizard();
+                            }, 3000);
+                        }
                     }
                 },
                 error: (xhr, status, error) => {
