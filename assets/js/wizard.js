@@ -30,16 +30,20 @@
                 this.loadZones();
                 this.loadMethods();
                 this.loadExistingCustomization();
-                this.showAllSteps(); // Show all steps for single-page approach
+                
+                // Delay showing steps to ensure DOM is ready
+                setTimeout(() => {
+                    this.showAllSteps(); // Show all steps for single-page approach
+                }, 200);
                 
                 // Ensure no step navigation buttons are visible
                 setTimeout(() => {
                     this.removeStepNavigationButtons();
-                }, 100);
+                }, 300);
             } else {
-                this.bindEvents();
-                this.initFileUpload();
-                this.loadSessionIfExists();
+            this.bindEvents();
+            this.initFileUpload();
+            this.loadSessionIfExists();
             }
         }
 
@@ -50,7 +54,7 @@
                 $(document).on('click', '.cancel-customization', this.handleCancel.bind(this));
             } else {
                 // Only bind remove button for cart page (still uses AJAX)
-                $(document).on('click', '.remove-customization-btn', this.removeCustomization.bind(this));
+            $(document).on('click', '.remove-customization-btn', this.removeCustomization.bind(this));
             }
             
             // Step navigation removed for single-page approach
@@ -67,10 +71,17 @@
             $(document).on('click', '.remove-file-btn', this.removeFile.bind(this));
             
             // Content type selection
+            $(document).on('click', '.content-type-card', this.handleContentTypeClick.bind(this));
             $(document).on('change', 'input[name="content_type"]', this.handleContentTypeChange.bind(this));
             
             // Text input
             $(document).on('input', '#custom-text-input', this.handleTextInput.bind(this));
+            
+            // New text configuration inputs
+            $(document).on('input', '#text-line-1, #text-line-2, #text-line-3', this.handleTextLineInput.bind(this));
+            $(document).on('change', '#text-font', this.handleTextLineInput.bind(this));
+            $(document).on('change', 'input[name="text_color"]', this.handleTextLineInput.bind(this));
+            $(document).on('click', '#preview-btn', this.handlePreviewClick.bind(this));
             
             // Final actions
             $(document).on('click', '#add-to-cart-btn', this.addToCart.bind(this));
@@ -135,9 +146,9 @@
                 window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
             } else {
                 // Modal behavior (for backward compatibility)
-                $('#wc-customizer-wizard-modal').fadeOut(300);
-                $('body').removeClass('wc-customizer-modal-open');
-                this.resetWizard();
+            $('#wc-customizer-wizard-modal').fadeOut(300);
+            $('body').removeClass('wc-customizer-modal-open');
+            this.resetWizard();
             }
         }
 
@@ -190,11 +201,19 @@
             $('#position-count').text('0');
             $('.selected-count').text('0 ' + wcCustomizerWizard.strings.selected);
             
-            // Reset content type selection
+            // Reset content type selection - hide both sections initially
             $('input[name="content_type"][value="logo"]').prop('checked', true);
-            $('.content-type-option').removeClass('selected');
-            $('input[name="content_type"][value="logo"]').parent('.content-type-option').addClass('selected');
-            $('#logo-upload-section').show();
+            $('.content-type-card').removeClass('selected');
+            $('.content-type-card .checkmark').hide();
+            
+            // Select the logo card by default
+            const $logoCard = $('.content-type-card[data-content-type="logo"]');
+            if ($logoCard.length > 0) {
+                $logoCard.addClass('selected');
+                $logoCard.find('.checkmark').show();
+            }
+            
+            $('#logo-upload-section').hide();
             $('#text-input-section').hide();
             $('#custom-text-input').val('');
             this.updateTextPreview();
@@ -203,8 +222,63 @@
         // Step navigation methods removed for single-page approach
         
         showAllSteps() {
-            // Show all steps for single-page approach
-            $('.wizard-step').show();
+            // Debug: Check if step-1 element exists
+            console.log('All wizard steps found:', $('.wizard-step').length);
+            console.log('Step 1 element exists:', $('#step-1').length);
+            console.log('All step IDs:', $('.wizard-step').map(function() { return this.id; }).get());
+            console.log('All step data-step attributes:', $('.wizard-step').map(function() { return $(this).data('step'); }).get());
+            
+            // Show only step 1 initially for progressive disclosure
+            $('.wizard-step').removeClass('active').hide();
+            
+            // Try multiple approaches to find step 1
+            let $step1 = $('#step-1');
+            if ($step1.length === 0) {
+                // Try by data-step attribute
+                $step1 = $('.wizard-step[data-step="1"]');
+                console.log('Step 1 found by data-step:', $step1.length);
+            }
+            
+            if ($step1.length === 0) {
+                console.error('Step 1 element not found! Available steps:', $('.wizard-step').map(function() { return this.id; }).get());
+                console.error('Available data-step attributes:', $('.wizard-step').map(function() { return $(this).data('step'); }).get());
+                // Try to show the first wizard step instead
+                const $firstStep = $('.wizard-step').first();
+                if ($firstStep.length > 0) {
+                    console.log('Showing first available step instead:', $firstStep.attr('id'), $firstStep.data('step'));
+                    $firstStep.addClass('active').show().css({
+                        'display': 'flex !important',
+                        'opacity': '1 !important',
+                        'transform': 'translateY(0) !important',
+                        'pointer-events': 'auto !important',
+                        'visibility': 'visible !important'
+                    });
+                }
+                return;
+            }
+            
+            // Force show step 1 immediately with multiple approaches
+            $step1.addClass('active');
+            $step1.show();
+            $step1.css({
+                'display': 'flex !important',
+                'opacity': '1 !important',
+                'transform': 'translateY(0) !important',
+                'pointer-events': 'auto !important',
+                'visibility': 'visible !important'
+            });
+            
+            // Additional fallback with longer delay
+            setTimeout(() => {
+                $step1.attr('style', 'display: flex !important; opacity: 1 !important; transform: translateY(0) !important; pointer-events: auto !important; visibility: visible !important;');
+                console.log('Step 1 forced visibility applied');
+            }, 100);
+            
+            console.log('Progressive disclosure initialized - showing step 1 only');
+            console.log('Step 1 visible:', $step1.is(':visible'));
+            console.log('Step 1 has active class:', $step1.hasClass('active'));
+            console.log('Step 1 computed styles:', $step1.css(['display', 'opacity', 'transform', 'visibility']));
+            console.log('Step 1 element:', $step1[0]);
             
             // Remove any remaining step navigation buttons
             this.removeStepNavigationButtons();
@@ -214,15 +288,197 @@
         }
         
         initializeContentTypeSelection() {
-            // Set initial state
-            $('.content-type-option').removeClass('selected');
-            $('input[name="content_type"][value="logo"]').parent('.content-type-option').addClass('selected');
+            console.log('=== INITIALIZING CONTENT TYPE SELECTION ===');
+            console.log('Content type cards found:', $('.content-type-card').length);
+            console.log('Logo card found:', $('.content-type-card[data-content-type="logo"]').length);
+            console.log('Text card found:', $('.content-type-card[data-content-type="text"]').length);
+            console.log('All content type cards:', $('.content-type-card').map(function() { return $(this).data('content-type'); }).get());
             
-            // Ensure correct sections are visible
-            $('#logo-upload-section').show();
+            // Debug: Check what HTML is actually present
+            console.log('Content type selection HTML:', $('.content-type-selection').html());
+            console.log('Step 3 HTML:', $('#step-3').html());
+            console.log('All elements with content-type in class name:', $('[class*="content-type"]').length);
+            console.log('All elements with data-content-type:', $('[data-content-type]').length);
+            
+            // Check if we have the new button-style cards
+            if ($('.content-type-card').length > 0) {
+                console.log('Using new button-style cards');
+                this.initializeButtonStyleCards();
+                } else {
+                console.log('Using fallback radio button approach');
+                this.initializeRadioButtonFallback();
+            }
+            
+            // Initialize text preview if text section is visible
+            setTimeout(() => {
+                console.log('=== INITIALIZING TEXT PREVIEW ===');
+                console.log('Text input section visible:', $('#text-input-section').is(':visible'));
+                console.log('Text line 1 element found:', $('#text-line-1').length);
+                console.log('Text line 2 element found:', $('#text-line-2').length);
+                console.log('Text line 3 element found:', $('#text-line-3').length);
+                console.log('Preview text element found:', $('.preview-text').length);
+                console.log('Preview area element found:', $('#text-preview-area').length);
+                
+                if ($('#text-input-section').is(':visible')) {
+                    this.updateTextPreview();
+                }
+            }, 200);
+        }
+        
+        initializeButtonStyleCards() {
+            // Set initial state - hide both sections initially
+            $('.content-type-card').removeClass('selected');
+            $('.content-type-card .checkmark').hide();
+            
+            // Select the logo card by default
+            const $logoCard = $('.content-type-card[data-content-type="logo"]');
+            console.log('Logo card element:', $logoCard[0]);
+            
+            if ($logoCard.length > 0) {
+                $logoCard.addClass('selected');
+                $logoCard.find('.checkmark').show();
+                console.log('Logo card selected successfully');
+            } else {
+                console.error('Logo card not found! Available cards:', $('.content-type-card').length);
+            }
+            
+            // Hide both sections initially
+            $('#logo-upload-section').hide();
             $('#text-input-section').hide();
             
-            console.log('Content type selection initialized');
+            console.log('Content type selection initialized - both sections hidden');
+            console.log('Logo card selected:', $('.content-type-card[data-content-type="logo"]').hasClass('selected'));
+            console.log('Text card selected:', $('.content-type-card[data-content-type="text"]').hasClass('selected'));
+            console.log('Selected card count:', $('.content-type-card.selected').length);
+            console.log('=== CONTENT TYPE SELECTION INITIALIZATION COMPLETE ===');
+        }
+        
+        initializeRadioButtonFallback() {
+            console.log('=== INITIALIZING RADIO BUTTON FALLBACK ===');
+            
+            // Check for existing radio button structure
+            const $logoRadio = $('input[name="content_type"][value="logo"]');
+            const $textRadio = $('input[name="content_type"][value="text"]');
+            
+            console.log('Logo radio found:', $logoRadio.length);
+            console.log('Text radio found:', $textRadio.length);
+            
+            if ($logoRadio.length > 0 && $textRadio.length > 0) {
+                // Create button-style wrapper around existing radio buttons
+                this.createButtonStyleWrapper();
+            } else {
+                console.error('No radio buttons found for content type selection');
+            }
+            
+            // Hide both sections initially - target actual elements that exist
+            $('.content-upload-area').hide();
+            $('.upload-zone').hide();
+            $('.content-text-area').hide();
+            
+            // Also try original IDs as fallback
+            $('#logo-upload-section').hide();
+            $('#text-input-section').hide();
+            
+            console.log('Initial state after hiding:');
+            console.log('Content upload area found:', $('.content-upload-area').length);
+            console.log('Content text area found:', $('.content-text-area').length);
+            console.log('Upload zone found:', $('.upload-zone').length);
+            console.log('Content upload area display:', $('.content-upload-area').css('display'));
+            console.log('Content text area display:', $('.content-text-area').css('display'));
+            
+            // Trigger change for the initially checked radio button to show the correct section
+            const $logoRadioCheck = $('input[name="content_type"][value="logo"]');
+            const $textRadioCheck = $('input[name="content_type"][value="text"]');
+            
+            if ($logoRadioCheck.is(':checked')) {
+                console.log('Logo radio is checked, triggering change to show logo section');
+                $logoRadioCheck.trigger('change');
+            } else if ($textRadioCheck.is(':checked')) {
+                console.log('Text radio is checked, triggering change to show text section');
+                $textRadioCheck.trigger('change');
+            } else {
+                console.log('No radio checked, defaulting to logo');
+                $logoRadioCheck.prop('checked', true).trigger('change');
+            }
+            
+            console.log('=== RADIO BUTTON FALLBACK INITIALIZATION COMPLETE ===');
+        }
+        
+        createButtonStyleWrapper() {
+            console.log('Creating button-style wrapper for radio buttons');
+            
+            // Find the content type options container - try multiple selectors
+            let $optionsContainer = $('.content-type-options');
+            if ($optionsContainer.length === 0) {
+                // Try to find the parent container of the radio buttons
+                $optionsContainer = $('input[name="content_type"]').closest('.content-type-selection');
+                console.log('Trying content-type-selection container:', $optionsContainer.length);
+            }
+            if ($optionsContainer.length === 0) {
+                // Try to find any container that has the radio buttons
+                $optionsContainer = $('input[name="content_type"]').parent().parent();
+                console.log('Trying parent container:', $optionsContainer.length);
+            }
+            if ($optionsContainer.length === 0) {
+                console.error('Content type options container not found');
+                return;
+            }
+            
+            console.log('Found options container:', $optionsContainer[0]);
+            
+            // Add button-style classes to existing options - work with label elements directly
+            $optionsContainer.find('label').each(function() {
+                const $option = $(this);
+                const $radio = $option.find('input[type="radio"]');
+                const contentType = $radio.val();
+                
+                console.log('Processing option for content type:', contentType);
+                
+                // Add data attribute for easier selection
+                $option.attr('data-content-type', contentType);
+                
+                // Add button-style classes
+                $option.addClass('content-type-option');
+                
+                // Add checkmark element
+                if ($option.find('.checkmark').length === 0) {
+                    $option.append('<div class="checkmark" style="display: none;">✓</div>');
+                }
+                
+                // Add click handler
+                $option.off('click.contentType').on('click.contentType', function(e) {
+                    e.preventDefault();
+                    console.log('Radio option clicked:', contentType);
+                    
+                    // Update radio button
+                    $radio.prop('checked', true).trigger('change');
+                    
+                    // Update visual selection
+                    $('label[data-content-type]').removeClass('selected');
+                    $('label[data-content-type] .checkmark').hide();
+                    
+                    $option.addClass('selected');
+                    $option.find('.checkmark').show();
+                    
+                    // Show/hide sections
+                    if (contentType === 'logo') {
+                        $('#text-input-section').hide();
+                        $('#logo-upload-section').show();
+                    } else if (contentType === 'text') {
+                        $('#logo-upload-section').hide();
+                        $('#text-input-section').show();
+                    }
+                });
+            });
+            
+            // Select logo option by default
+            const $logoOption = $('label[data-content-type="logo"]');
+            if ($logoOption.length > 0) {
+                $logoOption.addClass('selected');
+                $logoOption.find('.checkmark').show();
+                $logoOption.find('input[type="radio"]').prop('checked', true);
+                console.log('Logo option selected by default');
+            }
         }
         
         removeStepNavigationButtons() {
@@ -372,15 +628,47 @@
             const zoneId = parseInt($card.data('zone-id'));
             const zoneName = $card.data('zone-name');
             
+            console.log('Zone clicked:', zoneId, zoneName);
+            
             if ($card.hasClass('selected')) {
                 $card.removeClass('selected');
                 this.selectedZones = this.selectedZones.filter(z => z.id !== zoneId);
+                console.log('Zone deselected. Remaining zones:', this.selectedZones.length);
             } else {
                 $card.addClass('selected');
                 this.selectedZones.push({ id: zoneId, name: zoneName });
+                console.log('Zone selected. Total zones:', this.selectedZones.length);
             }
             
             this.updateZoneCounter();
+            
+            // Progressive disclosure: Show step 2 when zones are selected
+            if (this.selectedZones.length > 0) {
+                console.log('Showing step 2 - zones selected');
+                let $step2 = $('#step-2');
+                if ($step2.length === 0) {
+                    $step2 = $('.wizard-step[data-step="2"]');
+                    console.log('Step 2 found by data-step:', $step2.length);
+                }
+                
+                if ($step2.length > 0) {
+                    $step2.addClass('active').show().css({
+                        'display': 'flex !important',
+                        'opacity': '1 !important',
+                        'transform': 'translateY(0) !important',
+                        'pointer-events': 'auto !important',
+                        'visibility': 'visible !important'
+                    });
+                    console.log('Step 2 shown successfully');
+                } else {
+                    console.error('Step 2 element not found!');
+                }
+            } else {
+                console.log('Hiding step 2 - no zones selected');
+                $('#step-2').removeClass('active').hide();
+                $('.wizard-step[data-step="2"]').removeClass('active').hide();
+            }
+            
             this.autoSave();
         }
 
@@ -498,6 +786,8 @@
             const $card = $(e.currentTarget);
             const method = $card.data('method');
             
+            console.log('Method clicked:', method);
+            
             $('.method-card').removeClass('selected');
             $('.method-card .checkmark').hide();
             
@@ -508,6 +798,27 @@
             
             const statusText = `${this.capitalizeFirst(method)} ${wcCustomizerWizard.strings?.selected?.toLowerCase() || 'selected'}`;
             $('#method-selected-text').text(statusText);
+            
+            // Progressive disclosure: Show step 3 when method is selected
+            console.log('Showing step 3 - method selected');
+            let $step3 = $('#step-3');
+            if ($step3.length === 0) {
+                $step3 = $('.wizard-step[data-step="3"]');
+                console.log('Step 3 found by data-step:', $step3.length);
+            }
+            
+            if ($step3.length > 0) {
+                $step3.addClass('active').show().css({
+                    'display': 'flex !important',
+                    'opacity': '1 !important',
+                    'transform': 'translateY(0) !important',
+                    'pointer-events': 'auto !important',
+                    'visibility': 'visible !important'
+                });
+                console.log('Step 3 shown successfully');
+            } else {
+                console.error('Step 3 element not found!');
+            }
             
             this.autoSave();
         }
@@ -629,16 +940,29 @@
         }
 
         uploadFile(file) {
+            console.log('=== UPLOAD FILE STARTED ===');
+            console.log('File:', file);
+            console.log('File size:', file.size);
+            console.log('File type:', file.type);
+            console.log('File name:', file.name);
+            console.log('Settings:', wcCustomizerWizard.settings);
+            
             // Validate file
             if (!this.validateFile(file)) {
+                console.log('File validation failed');
                 return;
             }
+            
+            console.log('File validation passed, starting upload...');
             
             const formData = new FormData();
             formData.append('file', file);
             formData.append('session_id', this.sessionId);
             formData.append('action', 'wc_customizer_upload_file');
             formData.append('nonce', wcCustomizerWizard.uploadNonce);
+            
+            console.log('FormData prepared, session ID:', this.sessionId);
+            console.log('Upload nonce:', wcCustomizerWizard.uploadNonce);
             
             // Show progress
             $('#upload-progress').show();
@@ -656,23 +980,29 @@
                         if (e.lengthComputable) {
                             const percentComplete = (e.loaded / e.total) * 100;
                             $('.progress-fill').css('width', percentComplete + '%');
+                            console.log('Upload progress:', percentComplete + '%');
                         }
                     });
                     return xhr;
                 },
                 success: (response) => {
+                    console.log('Upload success response:', response);
                     $('#upload-progress').hide();
                     
                     if (response.success) {
+                        console.log('Upload successful, file data:', response.data);
                         this.uploadedFile = response.data;
                         this.showUploadedFile(response.data.original_name);
                         // Step navigation removed for single-page approach
                         this.autoSave();
                     } else {
+                        console.log('Upload failed:', response.data);
                         alert(response.data.message || wcCustomizerWizard.strings.error);
                     }
                 },
-                error: () => {
+                error: (xhr, status, error) => {
+                    console.error('Upload error:', xhr, status, error);
+                    console.error('Response text:', xhr.responseText);
                     $('#upload-progress').hide();
                     alert(wcCustomizerWizard.strings.error);
                 }
@@ -697,18 +1027,31 @@
         }
 
         showUploadedFile(filename) {
+            console.log('=== SHOW UPLOADED FILE ===');
+            console.log('Filename:', filename);
+            console.log('Uploaded file data:', this.uploadedFile);
+            console.log('Uploaded file elements found:', $('#uploaded-file').length);
+            console.log('File name element found:', $('#uploaded-file .file-name').length);
+            
             $('#uploaded-file .file-name').text(filename);
             
             // Show image preview if it's an image file
             const extension = filename.split('.').pop().toLowerCase();
             const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
             
+            console.log('File extension:', extension);
+            console.log('Is image file:', imageExtensions.includes(extension));
+            console.log('Has uploaded file URL:', this.uploadedFile && this.uploadedFile.url);
+            
             if (imageExtensions.includes(extension) && this.uploadedFile && this.uploadedFile.url) {
+                console.log('Showing image preview with URL:', this.uploadedFile.url);
                 $('#uploaded-image-preview').attr('src', this.uploadedFile.url).show();
             } else {
+                console.log('Hiding image preview');
                 $('#uploaded-image-preview').hide();
             }
             
+            console.log('Showing uploaded file section, hiding upload area');
             $('#uploaded-file').show();
             $('#upload-area').hide();
         }
@@ -723,25 +1066,43 @@
             this.autoSave();
         }
 
-        handleContentTypeChange(e) {
-            const contentType = e.target.value;
-            this.contentType = contentType;
+        handleContentTypeClick(e) {
+            console.log('=== CONTENT TYPE CARD CLICKED ===');
+            const $card = $(e.currentTarget);
+            const contentType = $card.data('content-type');
             
-            console.log('Content type changed to:', contentType);
-            console.log('Event target:', e.target);
-            console.log('Parent option:', $(e.target).parent('.content-type-option'));
+            console.log('Content type card clicked:', contentType);
+            console.log('Card element:', $card[0]);
+            console.log('Card classes:', $card.attr('class'));
+            console.log('Card data attributes:', $card.data());
             
             // Update visual selection
-            $('.content-type-option').removeClass('selected');
-            $(e.target).parent('.content-type-option').addClass('selected');
+            $('.content-type-card').removeClass('selected');
+            $('.content-type-card .checkmark').hide();
             
-            console.log('Selected option:', $('.content-type-option.selected').length);
+            $card.addClass('selected');
+            $card.find('.checkmark').show();
             
-            // Show/hide appropriate sections
+            // Update hidden radio input
+            $('input[name="content_type"]').prop('checked', false);
+            $(`input[name="content_type"][value="${contentType}"]`).prop('checked', true);
+            
+            this.contentType = contentType;
+            
+            console.log('Content type set to:', this.contentType);
+            console.log('Selected card count:', $('.content-type-card.selected').length);
+            
+            // Show/hide appropriate sections with smooth transition
             if (contentType === 'logo') {
                 console.log('Showing logo section, hiding text section');
-                $('#logo-upload-section').show();
                 $('#text-input-section').hide();
+                $('#logo-upload-section').show().css({
+                    'opacity': '0',
+                    'transform': 'translateY(20px)'
+                }).animate({
+                    'opacity': '1'
+                }, 300).css('transform', 'translateY(0)');
+                
                 // Reset text input
                 this.customText = '';
                 $('#custom-text-input').val('');
@@ -749,7 +1110,13 @@
             } else if (contentType === 'text') {
                 console.log('Showing text section, hiding logo section');
                 $('#logo-upload-section').hide();
-                $('#text-input-section').show();
+                $('#text-input-section').show().css({
+                    'opacity': '0',
+                    'transform': 'translateY(20px)'
+                }).animate({
+                    'opacity': '1'
+                }, 300).css('transform', 'translateY(0)');
+                
                 // Reset file upload
                 this.uploadedFile = null;
                 $('#uploaded-file').hide();
@@ -757,8 +1124,134 @@
                 $('#file-input').val('');
             }
             
-            // Update continue button state
-            // Step navigation removed for single-page approach
+            // Progressive disclosure: Show step 4 (final step) when content type is selected
+            console.log('Showing final step - content type selected');
+            let $finalStep = $('#step-final');
+            if ($finalStep.length === 0) {
+                $finalStep = $('.wizard-step[data-step="final"]');
+                console.log('Final step found by data-step="final":', $finalStep.length);
+            }
+            if ($finalStep.length === 0) {
+                $finalStep = $('.wizard-step[data-step="4"]');
+                console.log('Final step found by data-step="4":', $finalStep.length);
+            }
+            if ($finalStep.length === 0) {
+                $finalStep = $('.wizard-step').last();
+                console.log('Final step found by last():', $finalStep.length);
+            }
+            
+            if ($finalStep.length > 0) {
+                $finalStep.addClass('active').show().css({
+                    'display': 'flex !important',
+                    'opacity': '1 !important',
+                    'transform': 'translateY(0) !important',
+                    'pointer-events': 'auto !important',
+                    'visibility': 'visible !important'
+                });
+                console.log('Final step shown successfully');
+            } else {
+                console.error('Final step element not found!');
+            }
+            
+            this.autoSave();
+        }
+
+        handleContentTypeChange(e) {
+            const contentType = e.target.value;
+            this.contentType = contentType;
+            
+            console.log('Content type changed via radio button:', contentType);
+            
+            // Update visual selection for radio button approach
+            $('label[data-content-type]').removeClass('selected');
+            $('label[data-content-type] .checkmark').hide();
+            
+            const $selectedOption = $(e.target).closest('label[data-content-type]');
+            if ($selectedOption.length > 0) {
+                $selectedOption.addClass('selected');
+                $selectedOption.find('.checkmark').show();
+            }
+            
+            // Debug: Check elements before show/hide
+            console.log('Before show/hide:');
+            console.log('Logo section found:', $('#logo-upload-section').length);
+            console.log('Text section found:', $('#text-input-section').length);
+            console.log('Logo section display before:', $('#logo-upload-section').css('display'));
+            console.log('Text section display before:', $('#text-input-section').css('display'));
+            
+            // Debug: Search for any elements with these IDs or similar
+            console.log('All elements with logo-upload in ID:', $('[id*="logo-upload"]').length);
+            console.log('All elements with text-input in ID:', $('[id*="text-input"]').length);
+            console.log('All elements with upload in class:', $('[class*="upload"]').length);
+            console.log('All elements with text in class:', $('[class*="text"]').length);
+            
+            // Debug: Check if sections are in step 3
+            console.log('Step 3 content:', $('#step-3').html());
+            
+            // Debug: Check all wizard steps and their content
+            console.log('All wizard steps:', $('.wizard-step').length);
+            $('.wizard-step').each(function(index) {
+                const stepId = $(this).attr('id');
+                const stepData = $(this).attr('data-step');
+                const stepHtml = $(this).html();
+                console.log(`Step ${index + 1}:`, stepId, stepData, stepHtml.substring(0, 500) + '...');
+                
+                // Check if this is step 3 and look for upload container
+                if (stepData === '3' || stepId === 'step-3') {
+                    console.log('Step 3 upload container found:', $(this).find('.upload-container').length);
+                    console.log('Step 3 choose file button found:', $(this).find('.choose-file-btn').length);
+                    console.log('Step 3 checkmark icon found:', $(this).find('.checkmark-icon').length);
+                }
+            });
+            
+            // Debug: Look for any elements that might be our sections
+            console.log('Elements with upload in class:', $('[class*="upload"]').map(function() { return $(this).attr('id') || $(this).attr('class'); }).get());
+            console.log('Elements with text in class:', $('[class*="text"]').map(function() { return $(this).attr('id') || $(this).attr('class'); }).get());
+            
+            // Show/hide appropriate sections - target actual elements that exist
+            if (contentType === 'logo') {
+                console.log('Showing logo section, hiding text section');
+                
+                // Target the actual elements that exist based on console logs
+                $('.content-text-area').hide();
+                $('.content-upload-area').show();
+                $('.upload-zone').show();
+                
+                // Also try the original IDs as fallback
+                $('#text-input-section').hide();
+                $('#logo-upload-section').show();
+                $('[class*="text-input"]').hide();
+                $('[class*="logo-upload"]').show();
+                $('[id*="text-input"]').hide();
+                $('[id*="logo-upload"]').show();
+                
+                console.log('Logo section display after:', $('.content-upload-area').css('display'));
+                console.log('Text section display after:', $('.content-text-area').css('display'));
+            } else if (contentType === 'text') {
+                console.log('Showing text section, hiding logo section');
+                
+                // Target the actual elements that exist based on console logs
+                $('.content-upload-area').hide();
+                $('.upload-zone').hide();
+                $('.content-text-area').show();
+                
+                // Also try the original IDs as fallback
+                $('#logo-upload-section').hide();
+                $('#text-input-section').show();
+                $('[class*="logo-upload"]').hide();
+                $('[class*="text-input"]').show();
+                $('[id*="logo-upload"]').hide();
+                $('[id*="text-input"]').show();
+                
+                // Initialize text preview
+                setTimeout(() => {
+                    this.updateTextPreview();
+                }, 100);
+                
+                console.log('Logo section display after:', $('.content-upload-area').css('display'));
+                console.log('Text section display after:', $('.content-text-area').css('display'));
+            }
+            
             this.autoSave();
         }
 
@@ -778,14 +1271,118 @@
             this.autoSave();
         }
 
-        updateTextPreview() {
-            const $preview = $('#text-preview .preview-text');
+        handleTextLineInput(e) {
+            console.log('=== TEXT LINE INPUT CHANGED ===');
+            console.log('Target ID:', e.target.id);
+            console.log('Target value:', e.target.value);
+            console.log('Event type:', e.type);
+            this.updateTextPreview();
+            this.autoSave();
+        }
+
+        handlePreviewClick(e) {
+            e.preventDefault();
+            console.log('Preview button clicked');
+            this.updateTextPreview(true);
+        }
+
+        updateTextPreview(forceUpdate = false) {
+            console.log('=== UPDATE TEXT PREVIEW ===');
+            const $preview = $('.preview-text');
+            const $previewArea = $('#text-preview-area');
             
-            if (this.customText.trim()) {
-                $preview.text(this.customText).removeClass('empty');
+            console.log('Preview element found:', $preview.length);
+            console.log('Preview area found:', $previewArea.length);
+            
+            // Get text from new configuration fields
+            const textLine1 = $('#text-line-1').val() || '';
+            const textLine2 = $('#text-line-2').val() || '';
+            const textLine3 = $('#text-line-3').val() || '';
+            
+            console.log('Text lines:', { textLine1, textLine2, textLine3 });
+            
+            // Combine all text lines
+            const allTextLines = [textLine1, textLine2, textLine3].filter(line => line.trim());
+            const combinedText = allTextLines.join(' ');
+            
+            console.log('Combined text:', combinedText);
+            
+            // Get font and color
+            const selectedFont = $('#text-font').val() || 'arial';
+            const selectedColor = $('input[name="text_color"]:checked').val() || 'white';
+            
+            console.log('Selected font:', selectedFont);
+            console.log('Selected color:', selectedColor);
+            
+            if (combinedText.trim()) {
+                console.log('Updating preview with text:', combinedText);
+                
+                // Update preview text
+                $preview.text(combinedText).removeClass('empty');
+                
+                // Apply font and color styling with important flags
+                $preview.css({
+                    'font-family': this.getFontFamily(selectedFont) + ' !important',
+                    'color': this.getColorValue(selectedColor) + ' !important',
+                    'font-weight': 'bold !important',
+                    'font-size': '18px !important',
+                    'display': 'block !important',
+                    'visibility': 'visible !important',
+                    'opacity': '1 !important'
+                });
+                
+                // Update preview area styling
+                $previewArea.css({
+                    'background-color': selectedColor === 'white' ? '#333' : '#fff',
+                    'border': selectedColor === 'white' ? '2px solid #333' : '2px solid #ddd'
+                });
+                
+                console.log('Text preview updated:', {
+                    text: combinedText,
+                    font: selectedFont,
+                    color: selectedColor,
+                    previewElement: $preview[0],
+                    previewText: $preview.text()
+                });
             } else {
+                console.log('Resetting to placeholder text');
+                
+                // Reset to placeholder
                 $preview.text('Your text will appear here...').addClass('empty');
+                $preview.css({
+                    'font-family': 'inherit',
+                    'color': '#6b7280',
+                    'font-weight': 'normal',
+                    'font-size': 'inherit'
+                });
+                
+                $previewArea.css({
+                    'background-color': '#fff',
+                    'border': '1px solid #d1d5db'
+                });
             }
+        }
+
+        getFontFamily(fontValue) {
+            const fontMap = {
+                'arial': 'Arial, sans-serif',
+                'helvetica': 'Helvetica, Arial, sans-serif',
+                'times': 'Times New Roman, serif',
+                'courier': 'Courier New, monospace',
+                'verdana': 'Verdana, sans-serif',
+                'georgia': 'Georgia, serif'
+            };
+            return fontMap[fontValue] || 'Arial, sans-serif';
+        }
+
+        getColorValue(colorValue) {
+            const colorMap = {
+                'white': '#ffffff',
+                'black': '#000000',
+                'red': '#dc2626',
+                'blue': '#2563eb'
+            };
+            return colorMap[colorValue] || '#000000';
         }
 
         // Step navigation methods removed for single-page approach
@@ -899,16 +1496,39 @@
                 Adding to Cart...
             `);
             
+            // Collect all form data
             const customizationData = {
                 zones: this.selectedZones.map(z => z.name),
                 method: this.selectedMethod,
                 content_type: this.contentType,
                 file_path: this.contentType === 'logo' ? (this.uploadedFile ? this.uploadedFile.filepath : null) : null,
-                text_content: this.contentType === 'text' ? this.customText : null,
+                text_content: this.contentType === 'text' ? this.customText : null, // Legacy field
                 setup_fee: this.contentType === 'logo' ? 8.95 : 2.95, // Different fees for logo vs text
                 application_fee: 7.99, // Will be calculated properly
                 total_cost: this.contentType === 'logo' ? 16.94 : 10.94 // Will be calculated properly
             };
+            
+            console.log('=== ADD TO CART DEBUG ===');
+            console.log('Content type:', this.contentType);
+            console.log('Uploaded file:', this.uploadedFile);
+            console.log('File path being sent:', customizationData.file_path);
+            console.log('Full customization data:', customizationData);
+            
+            // Add new text configuration fields
+            if (this.contentType === 'text') {
+                customizationData.text_line_1 = $('#text-line-1').val() || '';
+                customizationData.text_line_2 = $('#text-line-2').val() || '';
+                customizationData.text_line_3 = $('#text-line-3').val() || '';
+                customizationData.text_font = $('#text-font').val() || 'arial';
+                customizationData.text_color = $('input[name="text_color"]:checked').val() || 'white';
+                customizationData.text_notes = $('#text-notes').val() || '';
+            }
+            
+            // Add logo alternative options
+            if (this.contentType === 'logo') {
+                customizationData.logo_alternative = $('input[name="logo_alternative"]:checked').val() || '';
+                customizationData.logo_notes = $('#logo-notes').val() || '';
+            }
             
             $.ajax({
                 url: wcCustomizerWizard.ajaxUrl,
@@ -929,11 +1549,11 @@
                             }, 1000);
                         } else {
                             // Modal behavior (for backward compatibility)
-                            $btn.html('✅ Added Successfully!');
-                            setTimeout(() => {
-                                this.closeWizard();
-                                location.reload(); // Refresh cart
-                            }, 1000);
+                        $btn.html('✅ Added Successfully!');
+                        setTimeout(() => {
+                        this.closeWizard();
+                        location.reload(); // Refresh cart
+                        }, 1000);
                         }
                     } else {
                         // Reset button

@@ -213,6 +213,29 @@ class WC_Product_Customizer_Cart_Integration {
                 echo '<div class="customization-zones">' . esc_html(implode(', ', $data['zones'] ?? array())) . '</div>';
             }
             
+            // Show logo preview if it's a logo customization
+            if ($data['content_type'] === 'logo' && !empty($data['file_path'])) {
+                echo '<div class="customization-logo-preview">';
+                echo '<strong>' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
+                
+                // Get the file URL
+                $upload_dir = wp_upload_dir();
+                $file_url = $upload_dir['baseurl'] . '/customization-files/' . $data['file_path'];
+                
+                // Check if it's an image file
+                $extension = strtolower(pathinfo($data['file_path'], PATHINFO_EXTENSION));
+                $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
+                
+                if (in_array($extension, $image_extensions)) {
+                    echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 100px; max-height: 100px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">';
+                } else {
+                    echo '<div style="background: #f0f0f0; padding: 10px; margin-top: 5px; border-radius: 4px; text-align: center; font-size: 12px;">';
+                    echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+                    echo '</div>';
+                }
+                echo '</div>';
+            }
+            
             if (!empty($data['total_cost'])) {
                 echo '<div class="customization-cost">£' . esc_html(number_format($data['total_cost'], 2)) . '</div>';
             }
@@ -352,11 +375,48 @@ class WC_Product_Customizer_Cart_Integration {
         }
         
         if (isset($data['file_path'])) {
-            $sanitized['file_path'] = sanitize_text_field($data['file_path']);
+            // Store just the filename for URL generation
+            $file_path = sanitize_text_field($data['file_path']);
+            $sanitized['file_path'] = basename($file_path);
         }
         
+        // Legacy text content (for backward compatibility)
         if (isset($data['text_content'])) {
             $sanitized['text_content'] = sanitize_textarea_field($data['text_content']);
+        }
+        
+        // New text configuration fields
+        if (isset($data['text_line_1'])) {
+            $sanitized['text_line_1'] = sanitize_text_field($data['text_line_1']);
+        }
+        
+        if (isset($data['text_line_2'])) {
+            $sanitized['text_line_2'] = sanitize_text_field($data['text_line_2']);
+        }
+        
+        if (isset($data['text_line_3'])) {
+            $sanitized['text_line_3'] = sanitize_text_field($data['text_line_3']);
+        }
+        
+        if (isset($data['text_font'])) {
+            $sanitized['text_font'] = sanitize_text_field($data['text_font']);
+        }
+        
+        if (isset($data['text_color'])) {
+            $sanitized['text_color'] = sanitize_text_field($data['text_color']);
+        }
+        
+        if (isset($data['text_notes'])) {
+            $sanitized['text_notes'] = sanitize_textarea_field($data['text_notes']);
+        }
+        
+        // Logo alternative options
+        if (isset($data['logo_alternative'])) {
+            $sanitized['logo_alternative'] = sanitize_text_field($data['logo_alternative']);
+        }
+        
+        if (isset($data['logo_notes'])) {
+            $sanitized['logo_notes'] = sanitize_textarea_field($data['logo_notes']);
         }
         
         if (isset($data['setup_fee'])) {
@@ -520,12 +580,52 @@ class WC_Product_Customizer_Cart_Integration {
             $display .= ' - ' . implode(', ', $data['zones']);
         }
         
-        if (!empty($data['text_content'])) {
-            $display .= ' - "' . $data['text_content'] . '"';
-        }
-        
-        if (!empty($data['file_path'])) {
-            $display .= ' - ' . __('Logo uploaded', 'wc-product-customizer');
+        // Display text content based on content type
+        if ($data['content_type'] === 'text') {
+            // New text configuration
+            $text_lines = array();
+            if (!empty($data['text_line_1'])) {
+                $text_lines[] = $data['text_line_1'];
+            }
+            if (!empty($data['text_line_2'])) {
+                $text_lines[] = $data['text_line_2'];
+            }
+            if (!empty($data['text_line_3'])) {
+                $text_lines[] = $data['text_line_3'];
+            }
+            
+            if (!empty($text_lines)) {
+                $display .= ' - "' . implode(' ', $text_lines) . '"';
+                
+                // Add font and color info
+                $text_details = array();
+                if (!empty($data['text_font'])) {
+                    $text_details[] = ucfirst($data['text_font']) . ' font';
+                }
+                if (!empty($data['text_color'])) {
+                    $text_details[] = ucfirst($data['text_color']) . ' color';
+                }
+                
+                if (!empty($text_details)) {
+                    $display .= ' (' . implode(', ', $text_details) . ')';
+                }
+            }
+            
+            // Legacy text content (for backward compatibility)
+            if (empty($text_lines) && !empty($data['text_content'])) {
+                $display .= ' - "' . $data['text_content'] . '"';
+            }
+        } else {
+            // Logo content
+            if (!empty($data['file_path'])) {
+                $display .= ' - ' . __('Logo uploaded', 'wc-product-customizer');
+            } elseif (!empty($data['logo_alternative'])) {
+                if ($data['logo_alternative'] === 'contact_later') {
+                    $display .= ' - ' . __('Logo to be provided later', 'wc-product-customizer');
+                } elseif ($data['logo_alternative'] === 'already_have') {
+                    $display .= ' - ' . __('Logo already on file', 'wc-product-customizer');
+                }
+            }
         }
         
         return $display;
@@ -607,7 +707,15 @@ class WC_Product_Customizer_Cart_Integration {
                 'method' => $data['method'] ?? '',
                 'content_type' => $data['content_type'] ?? '',
                 'file_path' => $data['file_path'] ?? '',
-                'text_content' => $data['text_content'] ?? '',
+                'text_content' => $data['text_content'] ?? '', // Legacy field
+                'text_line_1' => $data['text_line_1'] ?? '',
+                'text_line_2' => $data['text_line_2'] ?? '',
+                'text_line_3' => $data['text_line_3'] ?? '',
+                'text_font' => $data['text_font'] ?? '',
+                'text_color' => $data['text_color'] ?? '',
+                'text_notes' => $data['text_notes'] ?? '',
+                'logo_alternative' => $data['logo_alternative'] ?? '',
+                'logo_notes' => $data['logo_notes'] ?? '',
                 'setup_fee' => $data['setup_fee'] ?? 0,
                 'application_fee' => $data['application_fee'] ?? 0,
                 'total_cost' => $data['total_cost'] ?? 0
@@ -731,6 +839,13 @@ class WC_Product_Customizer_Cart_Integration {
         
         $cart_item_key = sanitize_text_field($_POST['cart_item_key']);
         $customization_data = $this->sanitize_customization_data($_POST['customization_data']);
+        
+        // Debug logging
+        error_log('=== AJAX ADD TO CART DEBUG ===');
+        error_log('Cart item key: ' . $cart_item_key);
+        error_log('Raw customization data: ' . print_r($_POST['customization_data'], true));
+        error_log('Sanitized customization data: ' . print_r($customization_data, true));
+        error_log('File path: ' . ($customization_data['file_path'] ?? 'NOT SET'));
         
         // Update cart item with customization data
         $cart = WC()->cart->get_cart();

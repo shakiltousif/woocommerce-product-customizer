@@ -27,7 +27,7 @@ class WC_Product_Customizer_Database {
      *
      * @var string
      */
-    private static $db_version = '1.3.0';
+    private static $db_version = '1.4.0';
 
     /**
      * Get instance
@@ -136,6 +136,14 @@ class WC_Product_Customizer_Database {
             content_type varchar(20),
             file_path varchar(255),
             text_content text,
+            text_line_1 varchar(255),
+            text_line_2 varchar(255),
+            text_line_3 varchar(255),
+            text_font varchar(50),
+            text_color varchar(20),
+            text_notes text,
+            logo_alternative varchar(50),
+            logo_notes text,
             setup_fee decimal(10,2) DEFAULT 0.00,
             application_fee decimal(10,2) DEFAULT 0.00,
             total_cost decimal(10,2) DEFAULT 0.00,
@@ -510,11 +518,19 @@ class WC_Product_Customizer_Database {
                 'content_type' => $data['content_type'],
                 'file_path' => $data['file_path'],
                 'text_content' => $data['text_content'],
+                'text_line_1' => $data['text_line_1'],
+                'text_line_2' => $data['text_line_2'],
+                'text_line_3' => $data['text_line_3'],
+                'text_font' => $data['text_font'],
+                'text_color' => $data['text_color'],
+                'text_notes' => $data['text_notes'],
+                'logo_alternative' => $data['logo_alternative'],
+                'logo_notes' => $data['logo_notes'],
                 'setup_fee' => $data['setup_fee'],
                 'application_fee' => $data['application_fee'],
                 'total_cost' => $data['total_cost']
             ),
-            array('%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f')
+            array('%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f')
         );
         
         return $result ? $wpdb->insert_id : false;

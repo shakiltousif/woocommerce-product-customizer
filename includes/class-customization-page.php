@@ -76,7 +76,7 @@ class WC_Product_Customizer_Page {
             'wc-customizer-wizard',
             WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/css/wizard.css',
             array(),
-            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() // Cache busting
+            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() . '.v17' // Enhanced cache busting
         );
 
             // Enqueue wizard scripts
@@ -84,11 +84,15 @@ class WC_Product_Customizer_Page {
                 'wc-customizer-wizard',
                 WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/js/wizard.js',
                 array('jquery'),
-                WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time(), // Cache busting
+                WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() . '.v17', // Enhanced cache busting
                 true
             );
 
             // Localize script
+            // Get file upload settings
+            $file_manager = WC_Product_Customizer_File_Manager::get_instance();
+            $settings = get_option('wc_product_customizer_settings', array());
+            
             wp_localize_script('wc-customizer-wizard', 'wcCustomizerWizard', array(
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'pluginUrl' => WC_PRODUCT_CUSTOMIZER_PLUGIN_URL,
@@ -97,6 +101,11 @@ class WC_Product_Customizer_Page {
                 'cartNonce' => wp_create_nonce('wc_customizer_cart'),
                 'pricingNonce' => wp_create_nonce('wc_customizer_pricing'),
                 'cartUrl' => wc_get_cart_url(),
+                'settings' => array(
+                    'maxFileSize' => isset($settings['file_upload']['max_size']) ? intval($settings['file_upload']['max_size']) : 8388608, // 8MB default
+                    'allowedTypes' => isset($settings['file_upload']['allowed_types']) ? explode(',', $settings['file_upload']['allowed_types']) : array('jpg', 'jpeg', 'png', 'pdf', 'ai', 'eps'),
+                    'uploadUrl' => $file_manager->get_upload_url()
+                ),
                 'strings' => array(
                     'loading' => __('Loading...', 'wc-product-customizer'),
                     'error' => __('An error occurred', 'wc-product-customizer'),
@@ -298,45 +307,257 @@ class WC_Product_Customizer_Page {
                         <h4><?php esc_html_e('Add Your Content', 'wc-product-customizer'); ?></h4>
                         <p class="step-description"><?php esc_html_e('Upload your logo or enter custom text.', 'wc-product-customizer'); ?></p>
                         
+                        <!-- Content Type Selection -->
                         <div class="content-type-selection">
-                            <label>
-                                <input type="radio" name="content_type" value="logo" checked>
-                                <span class="content-type-label">
-                                    <span class="content-type-icon">🖼️</span>
-                                    <?php esc_html_e('Upload Logo', 'wc-product-customizer'); ?>
-                                </span>
-                            </label>
-                            <label>
-                                <input type="radio" name="content_type" value="text">
-                                <span class="content-type-label">
-                                    <span class="content-type-icon">📝</span>
-                                    <?php esc_html_e('Custom Text', 'wc-product-customizer'); ?>
-                                </span>
-                            </label>
+                            <div class="content-type-grid">
+                                <div class="content-type-card" data-content-type="logo">
+                                    <div class="content-type-icon">🖼️</div>
+                                    <div class="content-type-title"><?php esc_html_e('Upload Logo', 'wc-product-customizer'); ?></div>
+                                    <div class="content-type-description"><?php esc_html_e('Upload an image file (JPG, PNG, PDF, AI, EPS)', 'wc-product-customizer'); ?></div>
+                                    <div class="checkmark" style="display: none;">✓</div>
+                                </div>
+                                <div class="content-type-card" data-content-type="text">
+                                    <div class="content-type-icon">📝</div>
+                                    <div class="content-type-title"><?php esc_html_e('Add Text', 'wc-product-customizer'); ?></div>
+                                    <div class="content-type-description"><?php esc_html_e('Type text directly for printing/embroidery', 'wc-product-customizer'); ?></div>
+                                    <div class="checkmark" style="display: none;">✓</div>
+                                </div>
+                            </div>
+                            <!-- Hidden radio inputs for form submission -->
+                            <input type="radio" name="content_type" value="logo" id="content_type_logo" checked style="display: none;">
+                            <input type="radio" name="content_type" value="text" id="content_type_text" style="display: none;">
                         </div>
 
-                        <div class="content-upload-area" id="content-upload-area">
-                            <div class="upload-zone" id="upload-zone">
-                                <div class="upload-icon">📁</div>
-                                <p><?php esc_html_e('Click to upload or drag and drop your logo', 'wc-product-customizer'); ?></p>
-                                <button type="button" id="add-logo-btn" class="button button-primary">
-                                    <?php esc_html_e('Choose File', 'wc-product-customizer'); ?>
-                                </button>
-                                <input type="file" id="file-input" accept="image/*" style="display: none;">
+                        <!-- Logo Upload Section -->
+                        <!-- DEBUG: New upload UI v10 - Matching reference design -->
+                        <div class="logo-upload-section" id="logo-upload-section">
+                            <div class="upload-container">
+                                <div class="upload-header">
+                                    <div class="upload-title">
+                                        <span class="checkmark-icon">✓</span>
+                                        <h4><?php esc_html_e('Upload your own logo', 'wc-product-customizer'); ?></h4>
+                                    </div>
+                                </div>
+                                
+                                <div class="upload-area" id="upload-area">
+                                    <button type="button" class="choose-file-btn" id="add-logo-btn">
+                                        <span class="upload-icon">↗</span>
+                                        <?php esc_html_e('Choose file', 'wc-product-customizer'); ?>
+                                    </button>
+                                    <input type="file" id="file-input" style="display: none;" accept=".jpg,.jpeg,.png,.pdf,.ai,.eps">
+                                    
+                                    <p class="drag-drop-text">
+                                        <?php esc_html_e('Drag \'n\' drop some files here, or click to select files', 'wc-product-customizer'); ?>
+                                    </p>
+                                    
+                                    <p class="file-specs">
+                                        <?php esc_html_e('JPG, PNG, EPS, AI, PDF Max size: 8MB', 'wc-product-customizer'); ?>
+                                    </p>
+                                    
+                                    <p class="reassurance-message">
+                                        <?php esc_html_e('Don\'t worry how it looks, we will make it look great and send a proof before we add to your products!', 'wc-product-customizer'); ?>
+                                    </p>
+                                </div>
+                                
+                                <div class="upload-progress" id="upload-progress" style="display: none;">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill"></div>
+                                    </div>
+                                    <span class="progress-text"><?php esc_html_e('Uploading...', 'wc-product-customizer'); ?></span>
+                                </div>
+                                
+                                <div class="uploaded-file" id="uploaded-file" style="display: none;">
+                                    <div class="file-preview">
+                                        <img id="uploaded-image-preview" src="" alt="Uploaded logo" style="display: none;">
+                                        <div class="file-info">
+                                            <span class="file-name"></span>
+                                            <button type="button" class="remove-file-btn">×</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Alternatively section -->
+                                <div class="alternative-section">
+                                    <div class="alternative-divider">
+                                        <span class="divider-text"><?php esc_html_e('alternatively...', 'wc-product-customizer'); ?></span>
+                                    </div>
+                                    
+                                    <div class="alternative-options">
+                                        <label class="alternative-option">
+                                            <input type="radio" name="logo_alternative" value="contact_later">
+                                            <span class="radio-custom"></span>
+                                            <span class="option-text">
+                                                <?php esc_html_e('Don\'t have your logo to hand? Don\'t worry, select here and we will contact after you place your order.', 'wc-product-customizer'); ?>
+                                            </span>
+                                        </label>
+                                        
+                                        <label class="alternative-option">
+                                            <input type="radio" name="logo_alternative" value="already_have">
+                                            <span class="radio-custom"></span>
+                                            <span class="option-text">
+                                                <?php esc_html_e('You already have my logo, it\'s just not in my account (no setup fee will be charged)', 'wc-product-customizer'); ?>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- Notes section -->
+                                <div class="notes-section">
+                                    <label for="logo-notes" class="notes-label">
+                                        <?php esc_html_e('Notes', 'wc-product-customizer'); ?>
+                                    </label>
+                                    <textarea 
+                                        id="logo-notes" 
+                                        name="logo_notes" 
+                                        placeholder="<?php esc_attr_e('Please let us know if you have any special requirements', 'wc-product-customizer'); ?>"
+                                        rows="3"
+                                    ></textarea>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="content-text-area" id="content-text-area" style="display: none;">
-                            <textarea id="custom-text-input" placeholder="<?php esc_attr_e('Enter your custom text...', 'wc-product-customizer'); ?>" rows="4"></textarea>
+                        <!-- Text Input Section -->
+                        <div class="text-input-section" id="text-input-section" style="display: none;">
+                            <div class="text-config-container">
+                                <div class="text-config-header">
+                                    <h4><?php esc_html_e('Configure your text logo', 'wc-product-customizer'); ?></h4>
+                                </div>
+                                
+                                <div class="text-config-form">
+                                    <!-- Text Input Fields -->
+                                    <div class="text-input-fields">
+                                        <div class="text-input-group">
+                                            <label for="text-line-1" class="text-input-label required">
+                                                <?php esc_html_e('Text Line 1', 'wc-product-customizer'); ?>*
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="text-line-1" 
+                                                name="text_line_1" 
+                                                placeholder="<?php esc_attr_e('e.g Workwear Express', 'wc-product-customizer'); ?>"
+                                                maxlength="50"
+                                                required
+                                            >
+                                        </div>
+                                        
+                                        <div class="text-input-group">
+                                            <label for="text-line-2" class="text-input-label">
+                                                <?php esc_html_e('Text Line 2 (Optional)', 'wc-product-customizer'); ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="text-line-2" 
+                                                name="text_line_2" 
+                                                placeholder=""
+                                                maxlength="50"
+                                            >
+                                        </div>
+                                        
+                                        <div class="text-input-group">
+                                            <label for="text-line-3" class="text-input-label">
+                                                <?php esc_html_e('Text Line 3 (Optional)', 'wc-product-customizer'); ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="text-line-3" 
+                                                name="text_line_3" 
+                                                placeholder=""
+                                                maxlength="50"
+                                            >
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Font and Color Selection -->
+                                    <div class="text-options">
+                                        <div class="option-group">
+                                            <label for="text-font" class="option-label">
+                                                <?php esc_html_e('Font', 'wc-product-customizer'); ?>
+                                            </label>
+                                            <select id="text-font" name="text_font" class="text-select">
+                                                <option value="arial" selected><?php esc_html_e('Arial', 'wc-product-customizer'); ?></option>
+                                                <option value="helvetica"><?php esc_html_e('Helvetica', 'wc-product-customizer'); ?></option>
+                                                <option value="times"><?php esc_html_e('Times New Roman', 'wc-product-customizer'); ?></option>
+                                                <option value="courier"><?php esc_html_e('Courier', 'wc-product-customizer'); ?></option>
+                                                <option value="verdana"><?php esc_html_e('Verdana', 'wc-product-customizer'); ?></option>
+                                                <option value="georgia"><?php esc_html_e('Georgia', 'wc-product-customizer'); ?></option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="option-group">
+                                            <label class="option-label">
+                                                <?php esc_html_e('Colour', 'wc-product-customizer'); ?>
+                                            </label>
+                                            <div class="color-options">
+                                                <label class="color-option">
+                                                    <input type="radio" name="text_color" value="white" checked>
+                                                    <span class="color-radio-custom white"></span>
+                                                    <span class="color-label"><?php esc_html_e('White', 'wc-product-customizer'); ?></span>
+                                                </label>
+                                                <label class="color-option">
+                                                    <input type="radio" name="text_color" value="black">
+                                                    <span class="color-radio-custom black"></span>
+                                                    <span class="color-label"><?php esc_html_e('Black', 'wc-product-customizer'); ?></span>
+                                                </label>
+                                                <label class="color-option">
+                                                    <input type="radio" name="text_color" value="red">
+                                                    <span class="color-radio-custom red"></span>
+                                                    <span class="color-label"><?php esc_html_e('Red', 'wc-product-customizer'); ?></span>
+                                                </label>
+                                                <label class="color-option">
+                                                    <input type="radio" name="text_color" value="blue">
+                                                    <span class="color-radio-custom blue"></span>
+                                                    <span class="color-label"><?php esc_html_e('Blue', 'wc-product-customizer'); ?></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Text Preview Section -->
+                                    <div class="text-preview-section">
+                                        <label class="preview-label">
+                                            <?php esc_html_e('Text Preview', 'wc-product-customizer'); ?>
+                                        </label>
+                                        <div class="text-preview-area" id="text-preview-area">
+                                            <div class="preview-content" id="preview-content">
+                                                <span class="preview-text"><?php esc_html_e('Your text will appear here...', 'wc-product-customizer'); ?></span>
+                                            </div>
+                                            <button type="button" class="preview-btn" id="preview-btn">
+                                                <?php esc_html_e('Preview', 'wc-product-customizer'); ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Notes Section -->
+                                    <div class="text-notes-section">
+                                        <label for="text-notes" class="notes-label">
+                                            <?php esc_html_e('Notes', 'wc-product-customizer'); ?>
+                                        </label>
+                                        <textarea 
+                                            id="text-notes" 
+                                            name="text_notes" 
+                                            placeholder="<?php esc_attr_e('Please let us know if you have any special requirements', 'wc-product-customizer'); ?>"
+                                            rows="3"
+                                        ></textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="step-actions">
-                            <button type="button" id="step-3-back" class="button button-secondary">
-                                <?php esc_html_e('Back', 'wc-product-customizer'); ?>
-                            </button>
-                            <button type="button" id="step-3-continue" class="button button-primary" disabled>
-                                <?php esc_html_e('Continue', 'wc-product-customizer'); ?>
-                            </button>
+                        <!-- Legacy upload area for fallback -->
+                        <div class="content-upload-area" id="content-upload-area" style="display: none;">
+                            <div class="upload-zone" id="upload-zone">
+                                <div class="upload-icon">📁</div>
+                                <p><?php esc_html_e('Click to upload or drag and drop your logo', 'wc-product-customizer'); ?></p>
+                                <button type="button" id="add-logo-btn-legacy" class="button button-primary">
+                                    <?php esc_html_e('Choose File', 'wc-product-customizer'); ?>
+                                </button>
+                                <input type="file" id="file-input-legacy" accept="image/*" style="display: none;">
+                            </div>
+                        </div>
+
+                        <!-- Legacy text area for fallback -->
+                        <div class="content-text-area" id="content-text-area" style="display: none;">
+                            <textarea id="custom-text-input-legacy" placeholder="<?php esc_attr_e('Enter your custom text...', 'wc-product-customizer'); ?>" rows="4"></textarea>
                         </div>
                     </div>
                 </div>

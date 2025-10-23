@@ -72,7 +72,7 @@ class WC_Product_Customizer_Wizard {
             'wc-customizer-wizard',
             WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/css/wizard.css',
             array(),
-            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() // Cache busting
+            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() . '.v9' // Enhanced cache busting
         );
 
         // Enqueue scripts
@@ -80,7 +80,7 @@ class WC_Product_Customizer_Wizard {
             'wc-customizer-wizard',
             WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/js/wizard.js',
             array('jquery'),
-            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time(), // Cache busting
+            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() . '.v9', // Enhanced cache busting
             true
         );
 
@@ -205,58 +205,75 @@ class WC_Product_Customizer_Wizard {
                 <div class="step-content">
                     <!-- Content Type Selection -->
                     <div class="content-type-selection">
-                        <div class="content-type-options">
-                            <label class="content-type-option">
-                                <input type="radio" name="content_type" value="logo" checked>
-                                <div class="option-content">
-                                    <span class="option-icon">🖼️</span>
-                                    <span class="option-title"><?php esc_html_e('Upload Logo', 'wc-product-customizer'); ?></span>
-                                    <span class="option-description"><?php esc_html_e('Upload an image file (JPG, PNG, PDF, AI, EPS)', 'wc-product-customizer'); ?></span>
-                                </div>
-                            </label>
-                            <label class="content-type-option">
-                                <input type="radio" name="content_type" value="text">
-                                <div class="option-content">
-                                    <span class="option-icon">📝</span>
-                                    <span class="option-title"><?php esc_html_e('Add Text', 'wc-product-customizer'); ?></span>
-                                    <span class="option-description"><?php esc_html_e('Type text directly for printing/embroidery', 'wc-product-customizer'); ?></span>
-                                </div>
-                            </label>
+                        <div class="content-type-grid">
+                            <div class="content-type-card" data-content-type="logo">
+                                <div class="content-type-icon">🖼️</div>
+                                <div class="content-type-title"><?php esc_html_e('Upload Logo', 'wc-product-customizer'); ?></div>
+                                <div class="content-type-description"><?php esc_html_e('Upload an image file (JPG, PNG, PDF, AI, EPS)', 'wc-product-customizer'); ?></div>
+                                <div class="checkmark" style="display: none;">✓</div>
+                            </div>
+                            <div class="content-type-card" data-content-type="text">
+                                <div class="content-type-icon">📝</div>
+                                <div class="content-type-title"><?php esc_html_e('Add Text', 'wc-product-customizer'); ?></div>
+                                <div class="content-type-description"><?php esc_html_e('Type text directly for printing/embroidery', 'wc-product-customizer'); ?></div>
+                                <div class="checkmark" style="display: none;">✓</div>
+                            </div>
                         </div>
+                        <!-- Hidden radio inputs for form submission -->
+                        <input type="radio" name="content_type" value="logo" id="content_type_logo" checked style="display: none;">
+                        <input type="radio" name="content_type" value="text" id="content_type_text" style="display: none;">
                     </div>
 
                     <!-- Logo Upload Section -->
+                    <!-- DEBUG: New upload UI v8 -->
                     <div class="logo-upload-section" id="logo-upload-section">
-                        <div class="upload-area" id="upload-area">
-                            <button type="button" class="add-logo-btn" id="add-logo-btn">
-                                <span class="upload-icon">📤</span>
-                                <?php esc_html_e('Add new logo', 'wc-product-customizer'); ?>
-                            </button>
-                            <input type="file" id="file-input" style="display: none;" accept=".jpg,.jpeg,.png,.pdf,.ai,.eps">
-                        </div>
-                        
-                        <div class="setup-cost" id="setup-cost">
-                            <strong>£<span id="setup-fee-amount">8.95</span></strong> 
-                            <?php esc_html_e('one-time new logo setup cost', 'wc-product-customizer'); ?>
-                        </div>
-                        
-                        <p class="setup-description">
-                            <?php esc_html_e('This cost includes the full digitisation of your logo. Don\'t worry how it looks when it\'s uploaded, we will send a proof before we begin production!', 'wc-product-customizer'); ?>
-                        </p>
-                        
-                        <div class="upload-progress" id="upload-progress" style="display: none;">
-                            <div class="progress-bar">
-                                <div class="progress-fill"></div>
+                        <div class="upload-container">
+                            <div class="upload-header">
+                                <div class="upload-title">
+                                    <span class="checkmark-icon">✓</span>
+                                    <h4><?php esc_html_e('Upload your own logo', 'wc-product-customizer'); ?></h4>
+                                </div>
                             </div>
-                            <span class="progress-text">Uploading...</span>
-                        </div>
-                        
-                        <div class="uploaded-file" id="uploaded-file" style="display: none;">
-                            <div class="file-preview">
-                                <img id="uploaded-image-preview" src="" alt="Uploaded logo" style="display: none;">
-                                <div class="file-info">
-                                    <span class="file-name"></span>
-                                    <button type="button" class="remove-file-btn">×</button>
+                            
+                            <div class="upload-area" id="upload-area">
+                                <button type="button" class="choose-file-btn" id="add-logo-btn">
+                                    <span class="upload-icon">↗</span>
+                                    <?php esc_html_e('Choose file', 'wc-product-customizer'); ?>
+                                </button>
+                                <input type="file" id="file-input" style="display: none;" accept=".jpg,.jpeg,.png,.pdf,.ai,.eps">
+                                
+                                <p class="drag-drop-text">
+                                    <?php esc_html_e('Drag \'n\' drop some files here, or click to select files', 'wc-product-customizer'); ?>
+                                </p>
+                                
+                                <p class="file-specs">
+                                    <?php esc_html_e('JPG, PNG, EPS, AI, PDF Max size: 8MB', 'wc-product-customizer'); ?>
+                                </p>
+                                
+                                <p class="reassurance-message">
+                                    <?php esc_html_e('Don\'t worry how it looks, we will make it look great and send a proof before we add to your products!', 'wc-product-customizer'); ?>
+                                </p>
+                            </div>
+                            
+                            <div class="setup-cost" id="setup-cost">
+                                <strong>£<span id="setup-fee-amount">8.95</span></strong> 
+                                <?php esc_html_e('one-time new logo setup cost', 'wc-product-customizer'); ?>
+                            </div>
+                            
+                            <div class="upload-progress" id="upload-progress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill"></div>
+                                </div>
+                                <span class="progress-text"><?php esc_html_e('Uploading...', 'wc-product-customizer'); ?></span>
+                            </div>
+                            
+                            <div class="uploaded-file" id="uploaded-file" style="display: none;">
+                                <div class="file-preview">
+                                    <img id="uploaded-image-preview" src="" alt="Uploaded logo" style="display: none;">
+                                    <div class="file-info">
+                                        <span class="file-name"></span>
+                                        <button type="button" class="remove-file-btn">×</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
