@@ -509,7 +509,7 @@ class WC_Product_Customizer_Admin {
                             </td>
                         </tr>
                         <?php else: ?>
-                        <?php foreach ($zones as $zone): ?>
+                <?php foreach ($zones as $zone): ?>
                         <tr class="zone-row" data-status="<?php echo ($zone->active ?? 0) ? 'active' : 'inactive'; ?>">
                             <td class="column-thumbnail">
                                 <?php if (!empty($zone->thumbnail_url)): ?>
@@ -517,7 +517,7 @@ class WC_Product_Customizer_Admin {
                                 <?php else: ?>
                                     <div class="no-thumbnail" style="width: 50px; height: 50px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
                                         <span class="dashicons dashicons-format-image"></span>
-                                    </div>
+                </div>
                                 <?php endif; ?>
                             </td>
                             <td class="column-name">
@@ -560,7 +560,7 @@ class WC_Product_Customizer_Admin {
                                 </button>
                             </td>
                         </tr>
-                        <?php endforeach; ?>
+                <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -632,7 +632,7 @@ class WC_Product_Customizer_Admin {
                                 <input type="text" id="zone_name" name="zone_name" value="<?php echo $is_edit ? esc_attr($zone->name ?? '') : ''; ?>" class="regular-text" required>
                                 <p class="description"><?php esc_html_e('The name that will be displayed to customers in the frontend.', 'wc-product-customizer'); ?></p>
                             </td>
-                        </tr>
+                            </tr>
                         
                         <tr>
                             <th scope="row">
@@ -642,7 +642,7 @@ class WC_Product_Customizer_Admin {
                                 <input type="text" id="zone_group" name="zone_group" value="<?php echo $is_edit ? esc_attr($zone->zone_group ?? '') : ''; ?>" class="regular-text" placeholder="<?php esc_attr_e('e.g., Front, Back, Sleeves', 'wc-product-customizer'); ?>">
                                 <p class="description"><?php esc_html_e('Group zones together for better organization.', 'wc-product-customizer'); ?></p>
                             </td>
-                        </tr>
+                            </tr>
                         
                         <tr>
                             <th scope="row">
@@ -732,7 +732,7 @@ class WC_Product_Customizer_Admin {
                                                 <?php echo $is_edit && strpos($zone->product_types ?? '', $category->name) !== false ? 'selected' : ''; ?>>
                                             <?php echo esc_html($category->name); ?>
                                         </option>
-                                    <?php endforeach; ?>
+                            <?php endforeach; ?>
                                 </select>
                                 <p class="description"><?php esc_html_e('Select WooCommerce product categories that can use this zone.', 'wc-product-customizer'); ?></p>
                             </td>
@@ -750,8 +750,8 @@ class WC_Product_Customizer_Admin {
                                 <p class="description"><?php esc_html_e('Inactive zones will not be available for selection in the frontend.', 'wc-product-customizer'); ?></p>
                             </td>
                         </tr>
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
                 
                 <p class="submit">
                     <button type="submit" class="button button-primary" id="save-zone-btn">
@@ -762,7 +762,7 @@ class WC_Product_Customizer_Admin {
                     </a>
                 </p>
             </form>
-        </div>
+                </div>
         <?php
     }
 
@@ -1009,8 +1009,8 @@ class WC_Product_Customizer_Admin {
                                     </a>
                                     <button type="button" class="button button-small toggle-config-status-btn" data-config-id="<?php echo esc_attr($config->id); ?>">
                                         <?php echo $config->enabled ? esc_html__('Deactivate', 'wc-product-customizer') : esc_html__('Activate', 'wc-product-customizer'); ?>
-                                    </button>
-                                </div>
+                </button>
+                </div>
                                 
                                 <div class="config-status">
                                     <?php if ($config->enabled): ?>
@@ -1535,14 +1535,14 @@ class WC_Product_Customizer_Admin {
         wp_nonce_field('wc_customization_meta', 'wc_customization_meta_nonce');
         ?>
         <div class="product-customization-meta">
-            <table class="form-table">
-                <tr>
-                    <th><label for="customization_enabled"><?php esc_html_e('Enable Customization', 'wc-product-customizer'); ?></label></th>
-                    <td>
-                        <input type="checkbox" id="customization_enabled" name="customization_enabled" value="1" <?php checked($enabled, '1'); ?> />
-                        <span class="description"><?php esc_html_e('Allow customers to customize this product', 'wc-product-customizer'); ?></span>
-                    </td>
-                </tr>
+        <table class="form-table">
+            <tr>
+                <th><label for="customization_enabled"><?php esc_html_e('Enable Customization', 'wc-product-customizer'); ?></label></th>
+                <td>
+                    <input type="checkbox" id="customization_enabled" name="customization_enabled" value="1" <?php checked($enabled, '1'); ?> />
+                    <span class="description"><?php esc_html_e('Allow customers to customize this product', 'wc-product-customizer'); ?></span>
+                </td>
+            </tr>
                 
                 <tr>
                     <th><label for="customization_auto_inherit"><?php esc_html_e('Configuration Source', 'wc-product-customizer'); ?></label></th>
@@ -1573,7 +1573,7 @@ class WC_Product_Customizer_Admin {
                         <p class="description"><?php esc_html_e('Select a specific configuration for this product.', 'wc-product-customizer'); ?></p>
                     </td>
                 </tr>
-            </table>
+        </table>
             
             <?php if ($current_config): ?>
                 <div class="current-config-info">

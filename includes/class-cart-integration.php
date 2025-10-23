@@ -192,6 +192,9 @@ class WC_Product_Customizer_Cart_Integration {
         }
         $rendered_items[] = $cart_item_key;
 
+        // Generate customization page URL
+        $customize_url = $this->get_customization_url($product_id, $cart_item_key);
+
         echo '<div class="customization-actions" data-cart-key="' . esc_attr($cart_item_key) . '" data-product-id="' . esc_attr($product_id) . '">';
         
         // If already customized, show edit button and summary
@@ -216,9 +219,9 @@ class WC_Product_Customizer_Cart_Integration {
             
             echo '</div>';
             echo '<div class="customization-buttons">';
-            echo '<button type="button" class="button edit-customization-btn" data-cart-key="' . esc_attr($cart_item_key) . '" data-product-id="' . esc_attr($product_id) . '">';
+            echo '<a href="' . esc_url($this->get_customization_url($product_id, $cart_item_key, null, true)) . '" class="button wc-customizer-edit-link">';
             echo esc_html__('Edit', 'wc-product-customizer');
-            echo '</button>';
+            echo '</a>';
             echo '<button type="button" class="button remove-customization-btn" data-cart-key="' . esc_attr($cart_item_key) . '">';
             echo esc_html__('Remove', 'wc-product-customizer');
             echo '</button>';
@@ -226,14 +229,14 @@ class WC_Product_Customizer_Cart_Integration {
             echo '</div>';
             
             // Add another logo button
-            echo '<button type="button" class="button add-another-customization-btn" data-cart-key="' . esc_attr($cart_item_key) . '" data-product-id="' . esc_attr($product_id) . '">';
+            echo '<a href="' . esc_url($customize_url) . '" class="button wc-customizer-add-link">';
             echo esc_html__('Add another logo to this item', 'wc-product-customizer');
-            echo '</button>';
+            echo '</a>';
         } else {
             // Show add customization button
-            echo '<button type="button" class="button add-customization-btn" data-cart-key="' . esc_attr($cart_item_key) . '" data-product-id="' . esc_attr($product_id) . '">';
+            echo '<a href="' . esc_url($customize_url) . '" class="button wc-customizer-add-link">';
             echo esc_html__('Add logo to this item', 'wc-product-customizer');
-            echo '</button>';
+            echo '</a>';
         }
         
         echo '</div>';
@@ -269,6 +272,34 @@ class WC_Product_Customizer_Cart_Integration {
         }
         
         return true;
+    }
+
+    /**
+     * Get customization URL
+     *
+     * @param int $product_id
+     * @param string $cart_key
+     * @param string $return_url
+     * @param bool $is_edit
+     * @return string
+     */
+    private function get_customization_url($product_id, $cart_key, $return_url = null, $is_edit = false) {
+        if (!$return_url) {
+            $return_url = wc_get_cart_url();
+        }
+        
+        $args = array(
+            'wc_customize' => '1',
+            'product_id' => $product_id,
+            'cart_key' => $cart_key,
+            'return_url' => urlencode($return_url)
+        );
+        
+        if ($is_edit) {
+            $args['edit'] = '1';
+        }
+        
+        return add_query_arg($args, home_url('/'));
     }
 
     /**
@@ -1201,12 +1232,16 @@ class WC_Product_Customizer_Cart_Integration {
                     
                     var buttonHtml = '<div class="customization-actions" data-cart-key="' + cartKey + '" data-product-id="' + productId + '" style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #f0f0f0;">';
                     
+                    // Generate customization URL
+                    var customizeUrl = '<?php echo home_url('/'); ?>?wc_customize=1&product_id=' + productId + '&cart_key=' + cartKey + '&return_url=' + encodeURIComponent('<?php echo wc_get_cart_url(); ?>');
+                    var editUrl = customizeUrl + '&edit=1';
+                    
                     if (hasCustomization) {
                         buttonHtml += '<div style="margin-bottom: 8px; font-size: 12px; color: #666; font-weight: 500;">Customization Options:</div>';
-                        buttonHtml += '<button type="button" class="button edit-customization-btn" data-cart-key="' + cartKey + '" data-product-id="' + productId + '" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 8px 16px; margin-right: 8px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</button>';
+                        buttonHtml += '<a href="' + editUrl + '" class="button wc-customizer-edit-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 8px 16px; margin-right: 8px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</a>';
                         buttonHtml += '<button type="button" class="button remove-customization-btn" data-cart-key="' + cartKey + '" style="background: #dc3545; color: white; border: 1px solid #dc3545; padding: 8px 16px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Remove Customization</button>';
                     } else {
-                        buttonHtml += '<button type="button" class="button add-customization-btn" data-cart-key="' + cartKey + '" data-product-id="' + productId + '" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Add logo to this item</button>';
+                        buttonHtml += '<a href="' + customizeUrl + '" class="button wc-customizer-add-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Add logo to this item</a>';
                     }
                     
                     buttonHtml += '</div>';

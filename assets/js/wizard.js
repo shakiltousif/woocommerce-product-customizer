@@ -23,25 +23,37 @@
         }
 
         init() {
-            this.bindEvents();
-            this.initFileUpload();
-            this.loadSessionIfExists();
+            if (this.isCustomizationPage()) {
+                this.initializeFromURL();
+                this.bindEvents();
+                this.initFileUpload();
+                this.loadZones();
+                this.loadMethods();
+                this.loadExistingCustomization();
+                this.showAllSteps(); // Show all steps for single-page approach
+                
+                // Ensure no step navigation buttons are visible
+                setTimeout(() => {
+                    this.removeStepNavigationButtons();
+                }, 100);
+            } else {
+                this.bindEvents();
+                this.initFileUpload();
+                this.loadSessionIfExists();
+            }
         }
 
         bindEvents() {
-            // Modal controls
-            $(document).on('click', '.add-customization-btn, .add-another-customization-btn', this.openWizard.bind(this));
-            $(document).on('click', '.edit-customization-btn', this.editCustomization.bind(this));
-            $(document).on('click', '.remove-customization-btn', this.removeCustomization.bind(this));
-            $(document).on('click', '.wc-customizer-modal-close, .wc-customizer-modal-overlay', this.closeWizard.bind(this));
+            // Only bind events for customization page
+            if (this.isCustomizationPage()) {
+                // Cancel button for customization page
+                $(document).on('click', '.cancel-customization', this.handleCancel.bind(this));
+            } else {
+                // Only bind remove button for cart page (still uses AJAX)
+                $(document).on('click', '.remove-customization-btn', this.removeCustomization.bind(this));
+            }
             
-            // Step navigation
-            $(document).on('click', '#step-1-continue', this.goToStep2.bind(this));
-            $(document).on('click', '#step-2-continue', this.goToStep3.bind(this));
-            $(document).on('click', '#step-3-continue', this.goToFinalStep.bind(this));
-            $(document).on('click', '#step-2-back', () => this.goToStep(1));
-            $(document).on('click', '#step-3-back', () => this.goToStep(2));
-            $(document).on('click', '#final-back', () => this.goToStep(3));
+            // Step navigation removed for single-page approach
             
             // Zone selection
             $(document).on('click', '.zone-card', this.toggleZone.bind(this));
@@ -70,56 +82,6 @@
             $(document).on('keydown', this.handleKeyboard.bind(this));
         }
 
-        openWizard(e) {
-            e.preventDefault();
-            
-            const $button = $(e.currentTarget);
-            this.cartItemKey = $button.data('cart-key');
-            this.productId = $button.data('product-id');
-            
-            // If product ID not found on button, try to get it from the container
-            if (!this.productId) {
-                const $container = $button.closest('.customization-actions');
-                this.productId = $container.data('product-id');
-            }
-            
-            console.log('Opening wizard for cart item:', this.cartItemKey, 'product:', this.productId);
-            
-            // Load product info
-            this.loadProductInfo();
-            
-            // Load zones
-            this.loadZones();
-            
-            // Load methods
-            this.loadMethods();
-            
-            // Show modal
-            $('#wc-customizer-wizard-modal').fadeIn(300);
-            $('body').addClass('wc-customizer-modal-open');
-            
-            // Generate session ID
-            this.sessionId = this.generateSessionId();
-        }
-
-        editCustomization(e) {
-            e.preventDefault();
-            
-            const $button = $(e.currentTarget);
-            this.cartItemKey = $button.data('cart-key');
-            this.productId = $button.data('product-id');
-            
-            // If product ID not found on button, try to get it from the container
-            if (!this.productId) {
-                const $container = $button.closest('.customization-actions');
-                this.productId = $container.data('product-id');
-            }
-            
-            console.log('Edit customization - Product ID:', this.productId, 'Cart Key:', this.cartItemKey);
-            
-            // Load existing customization data
-            this.loadExistingCustomization();
-        }
 
         removeCustomization(event) {
             event.preventDefault();
@@ -168,9 +130,47 @@
         }
 
         closeWizard() {
-            $('#wc-customizer-wizard-modal').fadeOut(300);
-            $('body').removeClass('wc-customizer-modal-open');
-            this.resetWizard();
+            if (this.isCustomizationPage()) {
+                // On customization page, redirect to return URL
+                window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
+            } else {
+                // Modal behavior (for backward compatibility)
+                $('#wc-customizer-wizard-modal').fadeOut(300);
+                $('body').removeClass('wc-customizer-modal-open');
+                this.resetWizard();
+            }
+        }
+
+        /**
+         * Check if we're on the customization page
+         */
+        isCustomizationPage() {
+            return $('body').hasClass('wc-customization-page');
+        }
+
+        /**
+         * Initialize from URL parameters
+         */
+        initializeFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            this.productId = urlParams.get('product_id');
+            this.cartItemKey = urlParams.get('cart_key');
+            this.returnUrl = urlParams.get('return_url');
+            
+            console.log('Initializing from URL:', {
+                productId: this.productId,
+                cartItemKey: this.cartItemKey,
+                returnUrl: this.returnUrl
+            });
+        }
+
+        /**
+         * Handle cancel button
+         */
+        handleCancel() {
+            if (confirm(wcCustomizerWizard.strings.confirmCancel)) {
+                window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
+            }
         }
 
         resetWizard() {
@@ -189,70 +189,48 @@
             $('.method-card').removeClass('selected');
             $('#position-count').text('0');
             $('.selected-count').text('0 ' + wcCustomizerWizard.strings.selected);
-            $('#step-1-continue').prop('disabled', true);
-            $('#step-2-continue').prop('disabled', true);
-            $('#step-3-continue').prop('disabled', true);
             
             // Reset content type selection
             $('input[name="content_type"][value="logo"]').prop('checked', true);
+            $('.content-type-option').removeClass('selected');
+            $('input[name="content_type"][value="logo"]').parent('.content-type-option').addClass('selected');
             $('#logo-upload-section').show();
             $('#text-input-section').hide();
             $('#custom-text-input').val('');
             this.updateTextPreview();
         }
 
-        goToStep(step) {
-            if (step < 1 || step > this.totalSteps) return;
+        // Step navigation methods removed for single-page approach
+        
+        showAllSteps() {
+            // Show all steps for single-page approach
+            $('.wizard-step').show();
             
-            $('.wizard-step').hide();
-            $(`#step-${step}`).show();
-            this.currentStep = step;
+            // Remove any remaining step navigation buttons
+            this.removeStepNavigationButtons();
             
-            // Update step-specific UI
-            if (step === 2) {
-                // Load methods if not already loaded
-                if ($('.method-card').length === 0) {
-                    this.loadMethods();
-                } else {
-                this.updateMethodAvailability();
-                }
-            } else if (step === 3) {
-                this.updateSetupFee();
-            }
-            
-            this.autoSave();
+            // Initialize content type selection
+            this.initializeContentTypeSelection();
         }
-
-        goToStep2() {
-            if (this.selectedZones.length === 0) {
-                alert(wcCustomizerWizard.strings.selectZones);
-                return;
-            }
-            this.goToStep(2);
-        }
-
-        goToStep3() {
-            if (!this.selectedMethod) {
-                alert(wcCustomizerWizard.strings.selectMethod);
-                return;
-            }
-            this.goToStep(3);
-        }
-
-        goToFinalStep() {
-            if (this.contentType === 'logo' && !this.uploadedFile) {
-                alert(wcCustomizerWizard.strings.uploadFile);
-                return;
-            }
+        
+        initializeContentTypeSelection() {
+            // Set initial state
+            $('.content-type-option').removeClass('selected');
+            $('input[name="content_type"][value="logo"]').parent('.content-type-option').addClass('selected');
             
-            if (this.contentType === 'text' && !this.customText.trim()) {
-                alert('Please enter some text for your customization.');
-                return;
-            }
+            // Ensure correct sections are visible
+            $('#logo-upload-section').show();
+            $('#text-input-section').hide();
             
-            this.generateSummary();
-            this.calculatePricing();
-            this.goToStep('final');
+            console.log('Content type selection initialized');
+        }
+        
+        removeStepNavigationButtons() {
+            // Remove any step navigation buttons that might exist
+            $('.continue-btn, .back-btn, #step-1-continue, #step-2-continue, #step-3-continue, #step-2-back, #step-3-back, #final-back').remove();
+            
+            // Remove any buttons in wizard footers except the main action button
+            $('.wizard-footer button:not(.add-to-cart-btn)').remove();
         }
 
         loadProductInfo() {
@@ -367,6 +345,12 @@
         }
 
         getZoneImageUrl(zoneName) {
+            // Fallback if plugin URL is undefined
+            let pluginUrl = wcCustomizerWizard.pluginUrl;
+            if (!pluginUrl || pluginUrl === 'undefined' || pluginUrl === '') {
+                pluginUrl = '/ecom_master/wp-content/plugins/woocommerce-product-customizer/';
+            }
+            
             // Map zone names to appropriate mockup images
             const zoneImageMap = {
                 'big-front': 'tshirt-front-center.png',
@@ -380,7 +364,7 @@
             };
             
             const imageName = zoneImageMap[zoneName.toLowerCase().replace(/\s+/g, '-')] || 'tshirt-front-center.png';
-            return `${wcCustomizerWizard.pluginUrl}assets/images/zones/${imageName}`;
+            return `${pluginUrl}assets/images/zones/${imageName}`;
         }
 
         toggleZone(e) {
@@ -404,7 +388,7 @@
             const count = this.selectedZones.length;
             $('#position-count').text(count);
             $('.selected-count').text(`${count} ${wcCustomizerWizard.strings.selected}`);
-            $('#step-1-continue').prop('disabled', count === 0);
+            // Step navigation removed for single-page approach
         }
 
         loadMethods() {
@@ -419,6 +403,7 @@
                 type: 'POST',
                 data: {
                     action: 'wc_customizer_get_methods',
+                    product_id: this.productId,
                     nonce: wcCustomizerWizard.nonce
                 },
                 success: (response) => {
@@ -466,6 +451,14 @@
             console.log('Rendering methods:', methods);
             const $selection = $('#method-selection');
             console.log('Method selection container:', $selection.length, $selection);
+            
+            if ($selection.length === 0) {
+                console.error('Method selection container not found!');
+                console.log('Available elements with method in ID:', $('[id*="method"]'));
+                console.log('All divs:', $('div[id]'));
+                return;
+            }
+            
             $selection.empty();
             
             methods.forEach(method => {
@@ -492,7 +485,13 @@
         }
 
         getMethodImageUrl(methodName) {
-            return `${wcCustomizerWizard.pluginUrl}assets/images/methods/${methodName}-sample.svg`;
+            // Fallback if plugin URL is undefined
+            let pluginUrl = wcCustomizerWizard.pluginUrl;
+            if (!pluginUrl || pluginUrl === 'undefined' || pluginUrl === '') {
+                pluginUrl = '/ecom_master/wp-content/plugins/woocommerce-product-customizer/';
+            }
+            
+            return `${pluginUrl}assets/images/methods/${methodName}-sample.svg`;
         }
 
         selectMethod(e) {
@@ -507,9 +506,8 @@
             
             this.selectedMethod = method;
             
-            const statusText = `${this.capitalizeFirst(method)} ${wcCustomizerWizard.strings.selected.toLowerCase()}`;
+            const statusText = `${this.capitalizeFirst(method)} ${wcCustomizerWizard.strings?.selected?.toLowerCase() || 'selected'}`;
             $('#method-selected-text').text(statusText);
-            $('#step-2-continue').prop('disabled', false);
             
             this.autoSave();
         }
@@ -668,7 +666,7 @@
                     if (response.success) {
                         this.uploadedFile = response.data;
                         this.showUploadedFile(response.data.original_name);
-                        $('#step-3-continue').prop('disabled', false);
+                        // Step navigation removed for single-page approach
                         this.autoSave();
                     } else {
                         alert(response.data.message || wcCustomizerWizard.strings.error);
@@ -721,7 +719,7 @@
             $('#uploaded-image-preview').hide().attr('src', '');
             $('#upload-area').show();
             $('#file-input').val('');
-            $('#step-3-continue').prop('disabled', true);
+            // Step navigation removed for single-page approach
             this.autoSave();
         }
 
@@ -730,9 +728,18 @@
             this.contentType = contentType;
             
             console.log('Content type changed to:', contentType);
+            console.log('Event target:', e.target);
+            console.log('Parent option:', $(e.target).parent('.content-type-option'));
+            
+            // Update visual selection
+            $('.content-type-option').removeClass('selected');
+            $(e.target).parent('.content-type-option').addClass('selected');
+            
+            console.log('Selected option:', $('.content-type-option.selected').length);
             
             // Show/hide appropriate sections
             if (contentType === 'logo') {
+                console.log('Showing logo section, hiding text section');
                 $('#logo-upload-section').show();
                 $('#text-input-section').hide();
                 // Reset text input
@@ -740,6 +747,7 @@
                 $('#custom-text-input').val('');
                 this.updateTextPreview();
             } else if (contentType === 'text') {
+                console.log('Showing text section, hiding logo section');
                 $('#logo-upload-section').hide();
                 $('#text-input-section').show();
                 // Reset file upload
@@ -750,7 +758,7 @@
             }
             
             // Update continue button state
-            this.updateStep3ContinueButton();
+            // Step navigation removed for single-page approach
             this.autoSave();
         }
 
@@ -766,7 +774,7 @@
             this.updateTextPreview();
             
             // Update continue button state
-            this.updateStep3ContinueButton();
+            // Step navigation removed for single-page approach
             this.autoSave();
         }
 
@@ -780,17 +788,7 @@
             }
         }
 
-        updateStep3ContinueButton() {
-            let canContinue = false;
-            
-            if (this.contentType === 'logo') {
-                canContinue = this.uploadedFile !== null;
-            } else if (this.contentType === 'text') {
-                canContinue = this.customText.trim().length > 0;
-            }
-            
-            $('#step-3-continue').prop('disabled', !canContinue);
-        }
+        // Step navigation methods removed for single-page approach
 
         generateSummary() {
             const summary = {
@@ -923,12 +921,20 @@
                 },
                 success: (response) => {
                     if (response.success) {
-                        // Show success state briefly
-                        $btn.html('✅ Added Successfully!');
-                        setTimeout(() => {
-                        this.closeWizard();
-                        location.reload(); // Refresh cart
-                        }, 1000);
+                        if (this.isCustomizationPage()) {
+                            // On customization page, redirect to return URL
+                            $btn.html('✅ Saving...');
+                            setTimeout(() => {
+                                window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
+                            }, 1000);
+                        } else {
+                            // Modal behavior (for backward compatibility)
+                            $btn.html('✅ Added Successfully!');
+                            setTimeout(() => {
+                                this.closeWizard();
+                                location.reload(); // Refresh cart
+                            }, 1000);
+                        }
                     } else {
                         // Reset button
                         $btn.prop('disabled', false);
@@ -1027,6 +1033,13 @@
                             this.highlightExistingSelections();
                         }, 500);
                     } else {
+                        // Check if this is a "no data found" error (normal for new customizations)
+                        if (response.data.message && response.data.message.includes('No customization data found')) {
+                            console.log('No existing customization data found - this is normal for new customizations');
+                            // Don't show error for new customizations, just continue normally
+                            return;
+                        }
+                        
                         console.error('Error loading customization data:', response.data.message);
                         const errorMessage = typeof response.data.message === 'string' ? response.data.message : 'Unknown error occurred';
                         this.showError('Error loading customization data: ' + errorMessage);
@@ -1141,14 +1154,6 @@
             const count = this.selectedZones ? this.selectedZones.length : 0;
             $('#position-count').text(count);
             $('.selected-count').text(`${count} ${wcCustomizerWizard.strings.selected}`);
-            
-            // Enable/disable continue button based on selection
-            const $continueBtn = $('#step-1-continue');
-            if (count > 0) {
-                $continueBtn.prop('disabled', false);
-            } else {
-                $continueBtn.prop('disabled', true);
-            }
         }
         
         updateMethodUI() {

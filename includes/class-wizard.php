@@ -52,10 +52,9 @@ class WC_Product_Customizer_Wizard {
         add_action('wp_ajax_wc_customizer_remove_customization', array($this, 'ajax_remove_customization'));
         add_action('wp_ajax_nopriv_wc_customizer_remove_customization', array($this, 'ajax_remove_customization'));
         
-        // Only enqueue scripts and render modal on frontend
+        // Only enqueue scripts on customization page
         if (!is_admin()) {
             add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
-            add_action('wp_footer', array($this, 'render_wizard_modal'));
         }
     }
 
@@ -63,7 +62,8 @@ class WC_Product_Customizer_Wizard {
      * Enqueue scripts and styles
      */
     public function enqueue_scripts() {
-        if (!is_cart() && !is_checkout()) {
+        // Only enqueue on customization page
+        if (get_query_var('wc_customize') !== '1') {
             return;
         }
 
@@ -72,7 +72,7 @@ class WC_Product_Customizer_Wizard {
             'wc-customizer-wizard',
             WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/css/wizard.css',
             array(),
-            WC_PRODUCT_CUSTOMIZER_VERSION
+            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time() // Cache busting
         );
 
         // Enqueue scripts
@@ -80,17 +80,28 @@ class WC_Product_Customizer_Wizard {
             'wc-customizer-wizard',
             WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/js/wizard.js',
             array('jquery'),
-            WC_PRODUCT_CUSTOMIZER_VERSION,
+            WC_PRODUCT_CUSTOMIZER_VERSION . '.' . time(), // Cache busting
             true
         );
 
+        // Debug: Check if constants are defined
+        error_log('WC_PRODUCT_CUSTOMIZER_PLUGIN_URL: ' . (defined('WC_PRODUCT_CUSTOMIZER_PLUGIN_URL') ? WC_PRODUCT_CUSTOMIZER_PLUGIN_URL : 'NOT DEFINED'));
+        
         // Localize script (standardized nonce names)
         wp_localize_script('wc-customizer-wizard', 'wcCustomizerWizard', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
+            'pluginUrl' => defined('WC_PRODUCT_CUSTOMIZER_PLUGIN_URL') ? WC_PRODUCT_CUSTOMIZER_PLUGIN_URL : '',
             'nonce' => wp_create_nonce('wc_customizer_nonce'),
             'uploadNonce' => wp_create_nonce('wc_customizer_upload'),
             'cartNonce' => wp_create_nonce('wc_customizer_cart'),
             'pricingNonce' => wp_create_nonce('wc_customizer_pricing'),
+            'cartUrl' => wc_get_cart_url(),
+            'debug' => array(
+                'pluginUrl' => defined('WC_PRODUCT_CUSTOMIZER_PLUGIN_URL') ? WC_PRODUCT_CUSTOMIZER_PLUGIN_URL : 'NOT DEFINED',
+                'pluginDir' => defined('WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR') ? WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR : 'NOT DEFINED',
+                'version' => defined('WC_PRODUCT_CUSTOMIZER_VERSION') ? WC_PRODUCT_CUSTOMIZER_VERSION : 'NOT DEFINED',
+                'timestamp' => time()
+            ),
             'strings' => array(
                 'loading' => __('Loading...', 'wc-product-customizer'),
                 'error' => __('An error occurred', 'wc-product-customizer'),
@@ -121,32 +132,11 @@ class WC_Product_Customizer_Wizard {
         ));
     }
 
-    /**
-     * Render wizard modal in footer
-     */
-    public function render_wizard_modal() {
-        if (!is_cart() && !is_checkout()) {
-            return;
-        }
-        ?>
-        <div id="wc-customizer-wizard-modal" class="wc-customizer-modal" style="display: none;">
-            <div class="wc-customizer-modal-overlay"></div>
-            <div class="wc-customizer-modal-content">
-                <div class="wc-customizer-modal-header">
-                    <button type="button" class="wc-customizer-modal-close">&times;</button>
-                </div>
-                <div class="wc-customizer-modal-body">
-                    <?php $this->render_wizard_content(); ?>
-                </div>
-            </div>
-        </div>
-        <?php
-    }
 
     /**
      * Render wizard content
      */
-    private function render_wizard_content() {
+    public function render_wizard_content() {
         ?>
         <div class="customization-wizard">
             <!-- Wizard Header -->
@@ -184,14 +174,11 @@ class WC_Product_Customizer_Wizard {
                     <div class="selection-status">
                         <span class="selected-count">0 <?php esc_html_e('selected', 'wc-product-customizer'); ?></span>
                     </div>
-                    <button type="button" class="continue-btn" id="step-1-continue" disabled>
-                        <?php esc_html_e('Continue', 'wc-product-customizer'); ?>
-                    </button>
                 </div>
             </div>
 
             <!-- Step 2: Choose Application Method -->
-            <div class="wizard-step" id="step-2" data-step="2" style="display: none;">
+            <div class="wizard-step" id="step-2" data-step="2">
                 <div class="step-header">
                     <h3><?php esc_html_e('2. Choose application method', 'wc-product-customizer'); ?></h3>
                 </div>
@@ -203,20 +190,14 @@ class WC_Product_Customizer_Wizard {
                 </div>
                 
                 <div class="wizard-footer">
-                    <button type="button" class="back-btn" id="step-2-back">
-                        <?php esc_html_e('Back a step', 'wc-product-customizer'); ?>
-                    </button>
                     <div class="method-status">
                         <span id="method-selected-text"></span>
                     </div>
-                    <button type="button" class="continue-btn" id="step-2-continue" disabled>
-                        <?php esc_html_e('Continue', 'wc-product-customizer'); ?>
-                    </button>
                 </div>
             </div>
 
             <!-- Step 3: Choose and Add Logo or Text -->
-            <div class="wizard-step" id="step-3" data-step="3" style="display: none;">
+            <div class="wizard-step" id="step-3" data-step="3">
                 <div class="step-header">
                     <h3><?php esc_html_e('3. Choose and add your logo or text', 'wc-product-customizer'); ?></h3>
                 </div>
@@ -283,7 +264,7 @@ class WC_Product_Customizer_Wizard {
 
                     <!-- Text Input Section -->
                     <div class="text-input-section" id="text-input-section" style="display: none;">
-                        <div class="text-input-area">
+                        <div class="text-input-wrapper">
                             <label for="custom-text-input" class="text-input-label">
                                 <?php esc_html_e('Enter your text:', 'wc-product-customizer'); ?>
                             </label>
@@ -322,17 +303,12 @@ class WC_Product_Customizer_Wizard {
                 </div>
                 
                 <div class="wizard-footer">
-                    <button type="button" class="back-btn" id="step-3-back">
-                        <?php esc_html_e('Back a step', 'wc-product-customizer'); ?>
-                    </button>
-                    <button type="button" class="continue-btn" id="step-3-continue" disabled>
-                        <?php esc_html_e('Continue', 'wc-product-customizer'); ?>
-                    </button>
+                    <!-- Navigation buttons removed for single-page approach -->
                 </div>
             </div>
 
             <!-- Final Step: Review and Add to Cart -->
-            <div class="wizard-step" id="step-final" data-step="final" style="display: none;">
+            <div class="wizard-step" id="step-final" data-step="final">
                 <div class="step-header">
                     <h3><?php esc_html_e('Review Your Customization', 'wc-product-customizer'); ?></h3>
                 </div>
@@ -348,9 +324,6 @@ class WC_Product_Customizer_Wizard {
                 </div>
                 
                 <div class="wizard-footer">
-                    <button type="button" class="back-btn" id="final-back">
-                        <?php esc_html_e('Back a step', 'wc-product-customizer'); ?>
-                    </button>
                     <button type="button" class="add-to-cart-btn" id="add-to-cart-btn">
                         <?php esc_html_e('Save & Return to Cart', 'wc-product-customizer'); ?>
                     </button>

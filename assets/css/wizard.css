@@ -3,6 +3,175 @@
 
 /* WooCommerce Product Customizer - Modern Wizard Styles */
 
+/* ========================================
+   Customization Page Styles
+   ======================================== */
+
+/* Hide all step navigation buttons for single-page approach */
+.continue-btn,
+.back-btn,
+#step-1-continue,
+#step-2-continue,
+#step-3-continue,
+#step-2-back,
+#step-3-back,
+#final-back,
+button[class*="continue"],
+button[class*="back"],
+button[id*="continue"],
+button[id*="back"] {
+    display: none !important;
+}
+
+/* Hide any wizard footer buttons except the main action button */
+.wizard-footer button:not(.add-to-cart-btn) {
+    display: none !important;
+}
+
+/* Page container */
+.wc-customization-page {
+    min-height: 100vh;
+    background: #f5f5f5;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Page header */
+.customization-page-header {
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.customization-page-header .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.back-to-cart {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.back-to-cart:hover {
+    color: #374151;
+}
+
+.customization-page-header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* Page content */
+.customization-page-content {
+    padding: 30px 0;
+}
+
+.customization-page-content .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Product preview */
+.product-preview {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    gap: 30px;
+    align-items: center;
+}
+
+.product-image img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.product-details h2 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.product-price {
+    font-size: 18px;
+    font-weight: 600;
+    color: #059669;
+    margin-bottom: 15px;
+}
+
+.product-description {
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+/* Wizard content - full width */
+.customization-wizard {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Page footer */
+.customization-page-footer {
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    padding: 20px 0;
+    margin-top: 30px;
+}
+
+.customization-page-footer .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Responsive design for customization page */
+@media (max-width: 768px) {
+    .customization-page-header .container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .product-preview {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .customization-wizard {
+        padding: 20px;
+    }
+    
+    .customization-page-footer .container {
+        justify-content: center;
+    }
+}
+
 /* Modern Color Palette */
 :root {
     --primary-color: #6366f1;
@@ -719,9 +888,13 @@
     color: #007cba;
 }
 
-.content-type-option input[type="radio"]:checked {
+.content-type-option.selected {
     border-color: #007cba;
     background: #e3f2fd;
+}
+
+.content-type-option.selected .option-content {
+    color: #007cba;
 }
 
 .option-content {
@@ -759,7 +932,7 @@
     margin-bottom: 30px;
 }
 
-.text-input-area {
+.text-input-wrapper {
     background: #f8f9fa;
     border: 2px solid #e9ecef;
     border-radius: 8px;

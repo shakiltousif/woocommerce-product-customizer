@@ -126,6 +126,7 @@ class WooCommerce_Product_Customizer {
         require_once WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR . 'includes/class-wizard.php';
         require_once WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR . 'includes/class-pricing.php';
         require_once WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR . 'includes/class-file-manager.php';
+        require_once WC_PRODUCT_CUSTOMIZER_PLUGIN_DIR . 'includes/class-customization-page.php';
     }
 
     /**
@@ -165,6 +166,9 @@ class WooCommerce_Product_Customizer {
         
         // Initialize file manager
         WC_Product_Customizer_File_Manager::get_instance();
+        
+        // Initialize customization page
+        WC_Product_Customizer_Page::get_instance();
     }
 
     /**
