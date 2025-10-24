@@ -180,14 +180,22 @@ class WC_Product_Customizer_File_Manager {
      * @return array
      */
     public function handle_upload($file, $session_id = null) {
+        error_log('=== HANDLE UPLOAD STARTED ===');
+        error_log('File data: ' . print_r($file, true));
+        error_log('Session ID: ' . $session_id);
+        
         // Generate session ID if not provided
         if (!$session_id) {
             $session_id = $this->generate_session_id();
+            error_log('Generated session ID: ' . $session_id);
         }
         
         // Validate file
         $validation = $this->validate_file($file);
+        error_log('File validation result: ' . print_r($validation, true));
+        
         if (!$validation['valid']) {
+            error_log('File validation failed: ' . $validation['error']);
             return array('success' => false, 'error' => $validation['error']);
         }
         
@@ -195,12 +203,21 @@ class WC_Product_Customizer_File_Manager {
         $filename = $this->generate_secure_filename($file['name'], $session_id);
         $filepath = $this->upload_dir . $filename;
         
+        error_log('Generated filename: ' . $filename);
+        error_log('File path: ' . $filepath);
+        error_log('Upload directory exists: ' . (is_dir($this->upload_dir) ? 'yes' : 'no'));
+        error_log('Upload directory writable: ' . (is_writable($this->upload_dir) ? 'yes' : 'no'));
+        
         // Move uploaded file
         if (move_uploaded_file($file['tmp_name'], $filepath)) {
+            error_log('File moved successfully');
+            
             // Additional security: scan file content
             try {
                 $this->scan_file_content($filepath);
+                error_log('File content scan passed');
             } catch (Exception $e) {
+                error_log('File content scan failed: ' . $e->getMessage());
                 unlink($filepath);
                 return array('success' => false, 'error' => $e->getMessage());
             }
@@ -208,7 +225,7 @@ class WC_Product_Customizer_File_Manager {
             // Generate file hash for duplicate detection
             $file_hash = $this->generate_file_hash($filepath);
             
-            return array(
+            $result = array(
                 'success' => true,
                 'filename' => $filename,
                 'filepath' => $filepath,
@@ -218,8 +235,12 @@ class WC_Product_Customizer_File_Manager {
                 'file_size' => filesize($filepath),
                 'session_id' => $session_id
             );
+            
+            error_log('Upload successful, returning: ' . print_r($result, true));
+            return $result;
         }
         
+        error_log('move_uploaded_file failed');
         return array('success' => false, 'error' => __('Upload failed', 'wc-product-customizer'));
     }
 
@@ -541,14 +562,22 @@ class WC_Product_Customizer_File_Manager {
      * AJAX handler for file upload
      */
     public function ajax_upload_file() {
+        error_log('=== AJAX UPLOAD FILE STARTED ===');
+        error_log('POST data: ' . print_r($_POST, true));
+        error_log('FILES data: ' . print_r($_FILES, true));
+        
         check_ajax_referer('wc_customizer_upload', 'nonce');
         
         if (!isset($_FILES['file'])) {
+            error_log('No file uploaded');
             wp_send_json_error(array('message' => __('No file uploaded', 'wc-product-customizer')));
         }
         
         $session_id = sanitize_text_field($_POST['session_id'] ?? '');
+        error_log('Session ID: ' . $session_id);
+        
         $result = $this->handle_upload($_FILES['file'], $session_id);
+        error_log('Upload result: ' . print_r($result, true));
         
         if ($result['success']) {
             wp_send_json_success($result);

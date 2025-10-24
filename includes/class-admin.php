@@ -521,7 +521,7 @@ class WC_Product_Customizer_Admin {
                                 <?php endif; ?>
                             </td>
                             <td class="column-name">
-                                <strong><?php echo esc_html($zone->name ?? ''); ?></strong>
+                                <strong><?php echo esc_html($zone->name ?? 'Unnamed Zone'); ?></strong>
                                 <?php if (!empty($zone->description)): ?>
                                     <br><small style="color: #666;"><?php echo esc_html($zone->description ?? ''); ?></small>
                                 <?php endif; ?>

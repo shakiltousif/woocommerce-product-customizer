@@ -18,17 +18,27 @@
             this.customText = '';
             this.contentType = 'logo'; // 'logo' or 'text'
             this.customizationData = {};
+            this.positionConfigs = {}; // Store per-position configurations
+            this.currentPositionId = null; // Currently active position tab
+            this.availableZones = []; // Available zones for this product
             
             this.init();
         }
 
         init() {
+            // Initialize session ID
+            this.loadSessionIfExists();
+            if (!this.sessionId) {
+                this.sessionId = this.generateSessionId();
+            }
+            console.log('Session ID initialized:', this.sessionId);
+            
             if (this.isCustomizationPage()) {
                 this.initializeFromURL();
                 this.bindEvents();
                 this.initFileUpload();
                 this.loadZones();
-                this.loadMethods();
+                // loadMethods() removed - now handled per position in renderPositionTabs()
                 this.loadExistingCustomization();
                 
                 // Delay showing steps to ensure DOM is ready
@@ -547,9 +557,9 @@
                     this.hideLoading($grid);
                     
                     if (response.success) {
-                        this.renderZones(response.data.zones);
-                        // Update UI after zones are rendered
-                        this.updateUIAfterDataLoad();
+                        this.availableZones = response.data.zones;
+                        this.renderPositionTabs();
+                        // Don't call updateUIAfterDataLoad here - it's for the old single customization flow
                     } else {
                         // Handle specific error codes
                         const errorCode = response.data.code || 'unknown';
@@ -677,6 +687,1047 @@
             $('#position-count').text(count);
             $('.selected-count').text(`${count} ${wcCustomizerWizard.strings.selected}`);
             // Step navigation removed for single-page approach
+        }
+
+        renderPositionTabs() {
+            console.log('=== RENDERING POSITION SELECTION ===');
+            console.log('Available zones:', this.availableZones);
+            
+            const $zoneGrid = $('#zone-grid');
+            $zoneGrid.empty();
+            
+            // Create position selection container
+            const positionSelection = $('<div class="position-selection-container"></div>');
+            
+            // Add title and description
+            positionSelection.append(`
+                <div class="position-selection-header">
+                    <h4>Select Customization Positions</h4>
+                    <p>Choose where you want to place your customization on the product. You can select multiple positions.</p>
+                </div>
+            `);
+            
+            // Create position boxes grid
+            const positionGrid = $('<div class="position-grid"></div>');
+            
+            // Create position boxes for each available zone
+            this.availableZones.forEach((zone, index) => {
+                const positionBox = $(`
+                    <div class="position-box" data-zone-id="${zone.id}" id="position-box-${zone.id}">
+                        <div class="position-thumbnail">
+                            <img src="${this.getZoneImageUrl(zone.name)}" alt="${zone.name}" onerror="this.src='${wcCustomizerWizard.pluginUrl}assets/images/default-zone.png'">
+                        </div>
+                        <div class="position-info">
+                            <h5 class="position-name">${zone.name}</h5>
+                            <p class="position-description">${zone.description || 'Customization position'}</p>
+                        </div>
+                        <div class="position-checkbox">
+                            <input type="checkbox" id="position-${zone.id}" data-zone-id="${zone.id}">
+                            <label for="position-${zone.id}"></label>
+                        </div>
+                    </div>
+                `);
+                
+                positionGrid.append(positionBox);
+                
+                // Initialize position config
+                this.positionConfigs[zone.id] = {
+                    zone_id: zone.id,
+                    zone_name: zone.name,
+                    method: null,
+                    content_type: null,
+                    file_path: null,
+                    text_line_1: '',
+                    text_line_2: '',
+                    text_line_3: '',
+                    text_font: 'arial',
+                    text_color: 'white',
+                    text_notes: '',
+                    logo_alternative: '',
+                    logo_notes: ''
+                };
+            });
+            
+            positionSelection.append(positionGrid);
+            
+            // Create configuration section (initially hidden)
+            const configSection = $(`
+                <div class="position-configuration-section" id="position-configuration-section" style="display: none;">
+                    <div class="config-header">
+                        <h4>Configure Selected Positions</h4>
+                        <p>Configure the method and content for each selected position.</p>
+                    </div>
+                    <div class="config-content" id="config-content">
+                        <!-- Dynamic configuration content will be inserted here -->
+                    </div>
+                </div>
+            `);
+            
+            $zoneGrid.append(positionSelection);
+            $zoneGrid.append(configSection);
+            
+            // Bind position selection events
+            this.bindPositionSelectionEvents();
+        }
+
+        bindPositionSelectionEvents() {
+            console.log('=== BINDING POSITION SELECTION EVENTS ===');
+            
+            // Handle position checkbox changes
+            $(document).on('change', '.position-box input[type="checkbox"]', (e) => {
+                const zoneId = parseInt($(e.target).data('zone-id'));
+                const isSelected = $(e.target).is(':checked');
+                
+                console.log('Position checkbox changed:', zoneId, isSelected);
+                
+                // Update position box visual state
+                const $positionBox = $(e.target).closest('.position-box');
+                if (isSelected) {
+                    $positionBox.addClass('selected');
+                } else {
+                    $positionBox.removeClass('selected');
+                    // Clear configuration for this position
+                    this.positionConfigs[zoneId] = {
+                        zone_id: zoneId,
+                        zone_name: this.availableZones.find(z => z.id === zoneId)?.name || '',
+                        method: null,
+                        content_type: null,
+                        file_path: null,
+                        text_line_1: '',
+                        text_line_2: '',
+                        text_line_3: '',
+                        text_font: 'arial',
+                        text_color: 'white',
+                        text_notes: '',
+                        logo_alternative: '',
+                        logo_notes: ''
+                    };
+                }
+                
+                // Update configuration section visibility
+                this.updateConfigurationSection();
+            });
+            
+            // Handle position box clicks (for better UX)
+            $(document).on('click', '.position-box', (e) => {
+                // Don't trigger if clicking the checkbox directly
+                if ($(e.target).is('input[type="checkbox"]') || $(e.target).is('label')) {
+                    return;
+                }
+                
+                const $checkbox = $(e.currentTarget).find('input[type="checkbox"]');
+                $checkbox.prop('checked', !$checkbox.prop('checked')).trigger('change');
+            });
+        }
+
+        updateConfigurationSection() {
+            console.log('=== UPDATING CONFIGURATION SECTION ===');
+            
+            const selectedPositions = this.getSelectedPositions();
+            const $configSection = $('#position-configuration-section');
+            const $configContent = $('#config-content');
+            
+            console.log('Selected positions:', selectedPositions);
+            
+            if (selectedPositions.length === 0) {
+                $configSection.hide();
+                return;
+            }
+            
+            // Show configuration section
+            $configSection.show();
+            
+            // Clear existing content
+            $configContent.empty();
+            
+            // Create tab navigation
+            const tabNav = $('<div class="config-tab-nav"></div>');
+            const tabContent = $('<div class="config-tab-content"></div>');
+            
+            // Create tabs for each selected position
+            selectedPositions.forEach((zoneId, index) => {
+                console.log('Processing zone ID:', zoneId);
+                const zone = this.availableZones.find(z => parseInt(z.id) === parseInt(zoneId));
+                if (!zone) {
+                    console.log('Zone not found for ID:', zoneId);
+                    return;
+                }
+                
+                const isActive = index === 0;
+                
+                // Create tab button
+                const tabButton = $(`
+                    <button class="config-tab-btn ${isActive ? 'active' : ''}" data-zone-id="${zoneId}">
+                        ${zone.name}
+                        <span class="tab-status">Not configured</span>
+                    </button>
+                `);
+                
+                tabNav.append(tabButton);
+                
+                // Create tab content
+                const tabPanel = $(`
+                    <div class="config-tab-panel ${isActive ? 'active' : ''}" data-zone-id="${zoneId}">
+                        <div class="config-position-content">
+                            <div class="method-selection" id="method-selection-${zoneId}">
+                                <!-- Methods will be loaded here -->
+                            </div>
+                            <div class="content-selection" id="content-selection-${zoneId}" style="display: none;">
+                                <!-- Content selection will be shown here -->
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                tabContent.append(tabPanel);
+                
+                // Load methods for this position if it's the active tab
+                if (isActive) {
+                    this.loadMethodsForPosition(zoneId);
+                }
+            });
+            
+            $configContent.append(tabNav);
+            $configContent.append(tabContent);
+            
+            // Bind tab events
+            this.bindConfigTabEvents();
+        }
+
+        bindConfigTabEvents() {
+            console.log('=== BINDING CONFIG TAB EVENTS ===');
+            
+            // Handle tab button clicks
+            $(document).on('click', '.config-tab-btn', (e) => {
+                const zoneId = parseInt($(e.currentTarget).data('zone-id'));
+                console.log('Tab clicked for zone:', zoneId);
+                
+                // Remove active class from all tabs and panels
+                $('.config-tab-btn').removeClass('active');
+                $('.config-tab-panel').removeClass('active');
+                
+                // Add active class to clicked tab and corresponding panel
+                $(e.currentTarget).addClass('active');
+                $(`.config-tab-panel[data-zone-id="${zoneId}"]`).addClass('active');
+                
+                // Load methods for this position if not already loaded
+                const $methodSelection = $(`#method-selection-${zoneId}`);
+                if ($methodSelection.children().length === 0) {
+                    this.loadMethodsForPosition(zoneId);
+                }
+            });
+        }
+
+        getSelectedPositions() {
+            const selected = [];
+            $('.position-box input[type="checkbox"]:checked').each(function() {
+                selected.push(parseInt($(this).data('zone-id')));
+            });
+            return selected;
+        }
+
+        switchPositionTab(zoneId) {
+            console.log('=== SWITCHING TO POSITION TAB ===', zoneId);
+            
+            // Update active tab
+            $('.position-tab-btn').removeClass('active');
+            $(`.position-tab-btn[data-zone-id="${zoneId}"]`).addClass('active');
+            
+            // Update active pane
+            $('.tab-pane').removeClass('active');
+            $(`.tab-pane[data-zone-id="${zoneId}"]`).addClass('active');
+            
+            // Set current position
+            this.currentPositionId = zoneId;
+            
+            // Load methods for this position
+            this.loadMethodsForPosition(zoneId);
+        }
+
+        bindTabEvents() {
+            // Tab switching
+            $(document).on('click', '.position-tab-btn', (e) => {
+                e.preventDefault();
+                const zoneId = parseInt($(e.currentTarget).data('zone-id'));
+                this.switchPositionTab(zoneId);
+            });
+            
+            // Remove position
+            $(document).on('click', '.remove-position-btn', (e) => {
+                e.stopPropagation();
+                const zoneId = parseInt($(e.currentTarget).data('zone-id'));
+                this.removePosition(zoneId);
+            });
+            
+            // Add position
+            $(document).on('click', '#add-position-btn', (e) => {
+                e.preventDefault();
+                this.showAddPositionModal();
+            });
+        }
+
+        removePosition(zoneId) {
+            console.log('=== REMOVING POSITION ===', zoneId);
+            
+            // Remove from configs
+            delete this.positionConfigs[zoneId];
+            
+            // Remove tab and pane
+            $(`.position-tab-btn[data-zone-id="${zoneId}"]`).remove();
+            $(`.tab-pane[data-zone-id="${zoneId}"]`).remove();
+            
+            // Switch to another tab if this was active
+            if (this.currentPositionId === zoneId) {
+                const remainingTabs = $('.position-tab-btn');
+                if (remainingTabs.length > 0) {
+                    const nextZoneId = parseInt(remainingTabs.first().data('zone-id'));
+                    this.switchPositionTab(nextZoneId);
+                } else {
+                    this.currentPositionId = null;
+                }
+            }
+        }
+
+        showAddPositionModal() {
+            // Create modal for adding positions
+            const modal = $(`
+                <div class="add-position-modal">
+                    <div class="modal-content">
+                        <h3>Add Position</h3>
+                        <div class="available-positions">
+                            ${this.availableZones.map(zone => `
+                                <button type="button" class="position-option" data-zone-id="${zone.id}">
+                                    ${zone.name}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <button type="button" class="close-modal">Close</button>
+                    </div>
+                </div>
+            `);
+            
+            $('body').append(modal);
+            
+            // Bind events
+            modal.on('click', '.position-option', (e) => {
+                const zoneId = parseInt($(e.currentTarget).data('zone-id'));
+                this.addPosition(zoneId);
+                modal.remove();
+            });
+            
+            modal.on('click', '.close-modal', () => {
+                modal.remove();
+            });
+        }
+
+        addPosition(zoneId) {
+            console.log('=== ADDING POSITION ===', zoneId);
+            
+            const zone = this.availableZones.find(z => z.id === zoneId);
+            if (!zone) return;
+            
+            // Add to configs if not already there
+            if (!this.positionConfigs[zoneId]) {
+                this.positionConfigs[zoneId] = {
+                    zone_id: zone.id,
+                    zone_name: zone.name,
+                    method: null,
+                    content_type: null,
+                    file_path: null,
+                    text_line_1: '',
+                    text_line_2: '',
+                    text_line_3: '',
+                    text_font: 'arial',
+                    text_color: 'white',
+                    text_notes: '',
+                    logo_alternative: '',
+                    logo_notes: ''
+                };
+                
+                // Add tab and pane
+                const tabId = `position-tab-${zone.id}`;
+                const tabBtn = $(`
+                    <button type="button" class="position-tab-btn" data-zone-id="${zone.id}" id="${tabId}">
+                        ${zone.name}
+                        <span class="remove-position-btn" data-zone-id="${zone.id}">×</span>
+                    </button>
+                `);
+                
+                const tabPane = $(`
+                    <div class="tab-pane" data-zone-id="${zone.id}" id="position-pane-${zone.id}">
+                        <div class="position-config">
+                            <h4>Configure ${zone.name}</h4>
+                            <div class="method-selection" id="method-selection-${zone.id}"></div>
+                            <div class="content-selection" id="content-selection-${zone.id}"></div>
+                        </div>
+                    </div>
+                `);
+                
+                $('.tab-navigation').append(tabBtn);
+                $('.tab-content').append(tabPane);
+                
+                // Switch to new tab
+                this.switchPositionTab(zoneId);
+            }
+        }
+
+        loadMethodsForPosition(zoneId) {
+            console.log('=== LOADING METHODS FOR POSITION ===', zoneId);
+            
+            const $methodContainer = $(`#method-selection-${zoneId}`);
+            this.showLoading($methodContainer);
+            
+            $.ajax({
+                url: wcCustomizerWizard.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wc_customizer_get_methods',
+                    product_id: this.productId,
+                    zone_id: zoneId,
+                    nonce: wcCustomizerWizard.nonce
+                },
+                success: (response) => {
+                    console.log('Methods response for position', zoneId, ':', response);
+                    this.hideLoading($methodContainer);
+                    
+                    if (response.success) {
+                        this.renderMethodsForPosition(zoneId, response.data.methods);
+                    } else {
+                        console.error('Failed to load methods for position:', response.data.message);
+                        $methodContainer.html('<p class="error">Failed to load methods</p>');
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('Error loading methods for position:', error);
+                    this.hideLoading($methodContainer);
+                    $methodContainer.html('<p class="error">Error loading methods</p>');
+                }
+            });
+        }
+
+        renderMethodsForPosition(zoneId, methods) {
+            console.log('=== RENDERING METHODS FOR POSITION ===', zoneId, methods);
+            
+            const $container = $(`#method-selection-${zoneId}`);
+            $container.empty();
+            
+            if (!methods || methods.length === 0) {
+                $container.html('<p class="no-methods">No methods available for this position</p>');
+                return;
+            }
+            
+            const methodGrid = $('<div class="method-grid"></div>');
+            
+            methods.forEach(method => {
+                const methodCard = $(`
+                    <div class="method-card" data-method="${method.name}">
+                        <div class="method-image">
+                            <img src="${this.getMethodImageUrl(method.name)}" alt="${method.name}" onerror="this.style.display='none'">
+                        </div>
+                        <div class="method-info">
+                            <h4>${method.name}</h4>
+                            <p>${method.description || ''}</p>
+                        </div>
+                    </div>
+                `);
+                
+                methodGrid.append(methodCard);
+            });
+            
+            $container.append(methodGrid);
+            
+            // Bind method selection for this position
+            this.bindMethodSelectionForPosition(zoneId);
+        }
+
+        bindMethodSelectionForPosition(zoneId) {
+            $(document).off(`click.method-${zoneId}`);
+            $(document).on(`click.method-${zoneId}`, `#method-selection-${zoneId} .method-card`, (e) => {
+                e.preventDefault();
+                const method = $(e.currentTarget).data('method');
+                this.selectMethodForPosition(zoneId, method);
+            });
+        }
+
+        selectMethodForPosition(zoneId, method) {
+            console.log('=== SELECTING METHOD FOR POSITION ===', zoneId, method);
+            
+            // Update visual selection
+            $(`#method-selection-${zoneId} .method-card`).removeClass('selected');
+            $(`#method-selection-${zoneId} .method-card[data-method="${method}"]`).addClass('selected');
+            
+            // Update config
+            this.positionConfigs[zoneId].method = method;
+            
+            // Show content selection for this position
+            this.showContentSelectionForPosition(zoneId);
+        }
+
+        showContentSelectionForPosition(zoneId) {
+            console.log('=== SHOWING CONTENT SELECTION FOR POSITION ===', zoneId);
+            
+            const $contentContainer = $(`#content-selection-${zoneId}`);
+            if ($contentContainer.length === 0) {
+                console.log('Content selection container not found for zone:', zoneId);
+                return;
+            }
+            
+            $contentContainer.empty();
+            
+            // Add content type selection
+            const contentTypeSelection = $(`
+                <div class="content-type-selection">
+                    <h4>Choose Content Type</h4>
+                    <div class="content-type-grid">
+                        <div class="content-type-card" data-content-type="logo">
+                            <div class="content-type-icon">🖼️</div>
+                            <h4>Upload Logo</h4>
+                            <p>Upload your own logo file</p>
+                        </div>
+                        <div class="content-type-card" data-content-type="text">
+                            <div class="content-type-icon">📝</div>
+                            <h4>Custom Text</h4>
+                            <p>Add custom text</p>
+                        </div>
+                    </div>
+                </div>
+            `);
+            
+            $contentContainer.append(contentTypeSelection);
+            
+            // Show the content selection container
+            $contentContainer.show();
+            
+            // Bind content type selection for this position
+            this.bindContentTypeSelectionForPosition(zoneId);
+        }
+
+        bindContentTypeSelectionForPosition(zoneId) {
+            $(document).off(`click.content-${zoneId}`);
+            $(document).on(`click.content-${zoneId}`, `#content-selection-${zoneId} .content-type-card`, (e) => {
+                e.preventDefault();
+                const contentType = $(e.currentTarget).data('content-type');
+                this.selectContentTypeForPosition(zoneId, contentType);
+            });
+        }
+
+        selectContentTypeForPosition(zoneId, contentType) {
+            console.log('=== SELECTING CONTENT TYPE FOR POSITION ===', zoneId, contentType);
+            
+            // Update visual selection
+            $(`#content-selection-${zoneId} .content-type-card`).removeClass('selected');
+            $(`#content-selection-${zoneId} .content-type-card[data-content-type="${contentType}"]`).addClass('selected');
+            
+            // Update config
+            this.positionConfigs[zoneId].content_type = contentType;
+            
+            // Show content input for this position
+            this.showContentInputForPosition(zoneId, contentType);
+        }
+
+        showContentInputForPosition(zoneId, contentType) {
+            console.log('=== SHOWING CONTENT INPUT FOR POSITION ===', zoneId, contentType);
+            
+            const $contentContainer = $(`#content-selection-${zoneId}`);
+            
+            // Remove existing content input
+            $contentContainer.find('.content-input').remove();
+            
+            if (contentType === 'logo') {
+                // Add logo upload section for this position
+                const logoSection = $(`
+                    <div class="content-input logo-upload-section" id="logo-upload-section-${zoneId}">
+                        <div class="upload-container">
+                            <div class="upload-header">
+                                <div class="upload-title">
+                                    <span class="checkmark-icon">✓</span>
+                                    <h4>Upload your own logo</h4>
+                                </div>
+                            </div>
+                            
+                            <div class="upload-area" id="upload-area-${zoneId}">
+                                <button type="button" class="choose-file-btn" id="add-logo-btn-${zoneId}">
+                                    <span class="upload-icon">↗</span>
+                                    Choose file
+                                </button>
+                                <input type="file" id="file-input-${zoneId}" style="display: none;" accept=".jpg,.jpeg,.png,.pdf,.ai,.eps">
+                                
+                                <p class="drag-drop-text">
+                                    Drag 'n' drop some files here, or click to select files
+                                </p>
+                                
+                                <p class="file-specs">
+                                    JPG, PNG, EPS, AI, PDF Max size: 8MB
+                                </p>
+                                
+                                <p class="reassurance-message">
+                                    Don't worry how it looks, we will make it look great and send a proof before we add to your products!
+                                </p>
+                            </div>
+                            
+                            <div class="upload-progress" id="upload-progress-${zoneId}" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill"></div>
+                                </div>
+                                <span class="progress-text">Uploading...</span>
+                            </div>
+                            
+                            <div class="uploaded-file" id="uploaded-file-${zoneId}" style="display: none;">
+                                <div class="file-preview">
+                                    <img id="uploaded-image-preview-${zoneId}" src="" alt="Uploaded logo" style="display: none;">
+                                    <div class="file-info">
+                                        <span class="file-name"></span>
+                                        <button type="button" class="remove-file-btn">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Alternatively section -->
+                            <div class="alternative-section">
+                                <div class="alternative-divider">
+                                    <span class="divider-text">alternatively...</span>
+                                </div>
+                                
+                                <div class="alternative-options">
+                                    <label class="alternative-option">
+                                        <input type="radio" name="logo_alternative_${zoneId}" value="contact_later">
+                                        <span class="radio-custom"></span>
+                                        <span class="option-text">
+                                            Don't have your logo to hand? Don't worry, select here and we will contact after you place your order.
+                                        </span>
+                                    </label>
+                                    
+                                    <label class="alternative-option">
+                                        <input type="radio" name="logo_alternative_${zoneId}" value="already_have">
+                                        <span class="radio-custom"></span>
+                                        <span class="option-text">
+                                            You already have my logo, it's just not in my account (no setup fee will be charged)
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Notes section -->
+                            <div class="notes-section">
+                                <label for="logo-notes-${zoneId}" class="notes-label">
+                                    Notes
+                                </label>
+                                <textarea 
+                                    id="logo-notes-${zoneId}" 
+                                    name="logo_notes_${zoneId}" 
+                                    placeholder="Please let us know if you have any special requirements"
+                                    rows="3"
+                                ></textarea>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                $contentContainer.append(logoSection);
+                
+                // Bind file upload events for this position
+                this.bindFileUploadForPosition(zoneId);
+                
+                // Bind alternative option events for this position
+                this.bindAlternativeOptionsForPosition(zoneId);
+                
+            } else if (contentType === 'text') {
+                // Add text input section for this position
+                const textSection = $(`
+                    <div class="content-input text-input-section" id="text-input-section-${zoneId}">
+                        <div class="text-config-container">
+                            <div class="text-config-header">
+                                <h4>Configure your text logo</h4>
+                            </div>
+                            
+                            <div class="text-config-form">
+                                <!-- Text Input Fields -->
+                                <div class="text-input-fields">
+                                    <div class="text-input-group">
+                                        <label for="text-line-1-${zoneId}" class="text-input-label required">
+                                            Text Line 1*
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="text-line-1-${zoneId}" 
+                                            name="text_line_1_${zoneId}" 
+                                            placeholder="e.g Workwear Express"
+                                            maxlength="50"
+                                            required
+                                        >
+                                    </div>
+                                    
+                                    <div class="text-input-group">
+                                        <label for="text-line-2-${zoneId}" class="text-input-label">
+                                            Text Line 2 (Optional)
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="text-line-2-${zoneId}" 
+                                            name="text_line_2_${zoneId}" 
+                                            placeholder=""
+                                            maxlength="50"
+                                        >
+                                    </div>
+                                    
+                                    <div class="text-input-group">
+                                        <label for="text-line-3-${zoneId}" class="text-input-label">
+                                            Text Line 3 (Optional)
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="text-line-3-${zoneId}" 
+                                            name="text_line_3_${zoneId}" 
+                                            placeholder=""
+                                            maxlength="50"
+                                        >
+                                    </div>
+                                </div>
+                                
+                                <!-- Font and Color Selection -->
+                                <div class="text-options">
+                                    <div class="option-group">
+                                        <label for="text-font-${zoneId}" class="option-label">
+                                            Font
+                                        </label>
+                                        <select id="text-font-${zoneId}" name="text_font_${zoneId}" class="text-select">
+                                            <option value="arial" selected>Arial</option>
+                                            <option value="helvetica">Helvetica</option>
+                                            <option value="times">Times New Roman</option>
+                                            <option value="courier">Courier</option>
+                                            <option value="verdana">Verdana</option>
+                                            <option value="georgia">Georgia</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="option-group">
+                                        <label class="option-label">
+                                            Colour
+                                        </label>
+                                        <div class="color-options">
+                                            <label class="color-option">
+                                                <input type="radio" name="text_color_${zoneId}" value="white" checked>
+                                                <span class="color-radio-custom white"></span>
+                                                <span class="color-label">White</span>
+                                            </label>
+                                            <label class="color-option">
+                                                <input type="radio" name="text_color_${zoneId}" value="black">
+                                                <span class="color-radio-custom black"></span>
+                                                <span class="color-label">Black</span>
+                                            </label>
+                                            <label class="color-option">
+                                                <input type="radio" name="text_color_${zoneId}" value="red">
+                                                <span class="color-radio-custom red"></span>
+                                                <span class="color-label">Red</span>
+                                            </label>
+                                            <label class="color-option">
+                                                <input type="radio" name="text_color_${zoneId}" value="blue">
+                                                <span class="color-radio-custom blue"></span>
+                                                <span class="color-label">Blue</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Text Preview Section -->
+                                <div class="text-preview-section">
+                                    <label class="preview-label">
+                                        Text Preview
+                                    </label>
+                                    <div class="text-preview-area" id="text-preview-area-${zoneId}">
+                                        <div class="preview-content" id="preview-content-${zoneId}">
+                                            <span class="preview-text">Your text will appear here...</span>
+                                        </div>
+                                        <button type="button" class="preview-btn" id="preview-btn-${zoneId}">
+                                            Preview
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Notes Section -->
+                                <div class="text-notes-section">
+                                    <label for="text-notes-${zoneId}" class="notes-label">
+                                        Notes
+                                    </label>
+                                    <textarea 
+                                        id="text-notes-${zoneId}" 
+                                        name="text_notes_${zoneId}" 
+                                        placeholder="Please let us know if you have any special requirements"
+                                        rows="3"
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                $contentContainer.append(textSection);
+                
+                // Bind text input events for this position
+                this.bindTextInputForPosition(zoneId);
+            }
+        }
+
+        bindFileUploadForPosition(zoneId) {
+            // File input change
+            $(document).off(`change.file-${zoneId}`);
+            $(document).on(`change.file-${zoneId}`, `#file-input-${zoneId}`, (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.uploadFileForPosition(zoneId, file);
+                }
+            });
+            
+            // Choose file button
+            $(document).off(`click.file-${zoneId}`);
+            $(document).on(`click.file-${zoneId}`, `#add-logo-btn-${zoneId}`, (e) => {
+                e.preventDefault();
+                $(`#file-input-${zoneId}`).click();
+            });
+            
+            // Remove file button
+            $(document).off(`click.remove-${zoneId}`);
+            $(document).on(`click.remove-${zoneId}`, `#uploaded-file-${zoneId} .remove-file-btn`, (e) => {
+                e.preventDefault();
+                this.removeFileForPosition(zoneId);
+            });
+        }
+
+        bindAlternativeOptionsForPosition(zoneId) {
+            console.log('=== BINDING ALTERNATIVE OPTIONS FOR POSITION ===', zoneId);
+            
+            // Bind radio button changes for alternative options
+            $(document).off(`change.alternative-${zoneId}`);
+            $(document).on(`change.alternative-${zoneId}`, `#logo-upload-section-${zoneId} input[name="logo_alternative_${zoneId}"]`, (e) => {
+                const selectedValue = $(e.target).val();
+                console.log('Alternative option selected:', selectedValue);
+                
+                // Update position config
+                this.positionConfigs[zoneId].logo_alternative = selectedValue;
+                
+                console.log('Updated position config:', this.positionConfigs[zoneId]);
+            });
+            
+            // Bind logo notes input
+            $(document).off(`input.logo-notes-${zoneId}`);
+            $(document).on(`input.logo-notes-${zoneId}`, `#logo-notes-${zoneId}`, (e) => {
+                const notesValue = $(e.target).val();
+                console.log('Logo notes updated:', notesValue);
+                
+                // Update position config
+                this.positionConfigs[zoneId].logo_notes = notesValue;
+                
+                console.log('Updated position config with notes:', this.positionConfigs[zoneId]);
+            });
+        }
+
+        bindTextInputForPosition(zoneId) {
+            // Text input events
+            $(document).off(`input.text-${zoneId}`);
+            $(document).on(`input.text-${zoneId}`, `#text-line-1-${zoneId}, #text-line-2-${zoneId}, #text-line-3-${zoneId}, #text-notes-${zoneId}`, (e) => {
+                this.updateTextPreviewForPosition(zoneId);
+            });
+            
+            $(document).off(`change.text-${zoneId}`);
+            $(document).on(`change.text-${zoneId}`, `#text-font-${zoneId}, input[name="text_color_${zoneId}"]`, (e) => {
+                this.updateTextPreviewForPosition(zoneId);
+            });
+            
+            $(document).off(`click.preview-${zoneId}`);
+            $(document).on(`click.preview-${zoneId}`, `#preview-btn-${zoneId}`, (e) => {
+                e.preventDefault();
+                this.updateTextPreviewForPosition(zoneId, true);
+            });
+        }
+
+        uploadFileForPosition(zoneId, file) {
+            console.log('=== UPLOADING FILE FOR POSITION ===', zoneId, file);
+            console.log('File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified
+            });
+            
+            // Validate file
+            if (!this.validateFile(file)) {
+                console.log('File validation failed');
+                return;
+            }
+            
+            console.log('File validation passed, preparing upload...');
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('session_id', this.sessionId);
+            formData.append('action', 'wc_customizer_upload_file');
+            formData.append('nonce', wcCustomizerWizard.uploadNonce);
+            
+            console.log('FormData prepared:', {
+                sessionId: this.sessionId,
+                action: 'wc_customizer_upload_file',
+                nonce: wcCustomizerWizard.uploadNonce,
+                ajaxUrl: wcCustomizerWizard.ajaxUrl
+            });
+            
+            // Show progress
+            $(`#upload-progress-${zoneId}`).show();
+            $(`#upload-progress-${zoneId} .progress-fill`).css('width', '0%');
+            
+            $.ajax({
+                url: wcCustomizerWizard.ajaxUrl,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: () => {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            const percentComplete = (e.loaded / e.total) * 100;
+                            $(`#upload-progress-${zoneId} .progress-fill`).css('width', percentComplete + '%');
+                            console.log('Upload progress:', percentComplete + '%');
+                        }
+                    });
+                    return xhr;
+                },
+                success: (response) => {
+                    console.log('Upload success response:', response);
+                    $(`#upload-progress-${zoneId}`).hide();
+                    
+                    if (response.success) {
+                        console.log('Upload successful, storing file data:', response.data);
+                        // Store file data for this position
+                        this.positionConfigs[zoneId].uploadedFile = response.data;
+                        this.positionConfigs[zoneId].file_path = response.data.filepath;
+                        this.showUploadedFileForPosition(zoneId, response.data.original_name);
+                    } else {
+                        console.log('Upload failed:', response.data);
+                        alert(response.data.message || wcCustomizerWizard.strings.error);
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('Upload error:', xhr, status, error);
+                    console.error('Response text:', xhr.responseText);
+                    $(`#upload-progress-${zoneId}`).hide();
+                    alert('Upload failed: ' + error);
+                }
+            });
+        }
+
+        showUploadedFileForPosition(zoneId, filename) {
+            $(`#uploaded-file-${zoneId} .file-name`).text(filename);
+            
+            // Show image preview if it's an image file
+            const extension = filename.split('.').pop().toLowerCase();
+            const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+            
+            if (imageExtensions.includes(extension) && this.positionConfigs[zoneId].uploadedFile && this.positionConfigs[zoneId].uploadedFile.url) {
+                $(`#uploaded-image-preview-${zoneId}`).attr('src', this.positionConfigs[zoneId].uploadedFile.url).show();
+            } else {
+                $(`#uploaded-image-preview-${zoneId}`).hide();
+            }
+            
+            $(`#uploaded-file-${zoneId}`).show();
+            $(`#upload-area-${zoneId}`).hide();
+        }
+
+        removeFileForPosition(zoneId) {
+            this.positionConfigs[zoneId].uploadedFile = null;
+            this.positionConfigs[zoneId].file_path = null;
+            $(`#uploaded-file-${zoneId}`).hide();
+            $(`#uploaded-image-preview-${zoneId}`).hide().attr('src', '');
+            $(`#upload-area-${zoneId}`).show();
+            $(`#file-input-${zoneId}`).val('');
+        }
+
+        updateTextPreviewForPosition(zoneId, forceUpdate = false) {
+            const $preview = $(`#preview-content-${zoneId} .preview-text`);
+            const $previewArea = $(`#text-preview-area-${zoneId}`);
+            
+            // Get text from this position's fields
+            const textLine1 = $(`#text-line-1-${zoneId}`).val() || '';
+            const textLine2 = $(`#text-line-2-${zoneId}`).val() || '';
+            const textLine3 = $(`#text-line-3-${zoneId}`).val() || '';
+            
+            // Combine all text lines
+            const allTextLines = [textLine1, textLine2, textLine3].filter(line => line.trim());
+            const combinedText = allTextLines.join(' ');
+            
+            // Get font and color
+            const selectedFont = $(`#text-font-${zoneId}`).val() || 'arial';
+            const selectedColor = $(`input[name="text_color_${zoneId}"]:checked`).val() || 'white';
+            
+            console.log('Text preview debug:', {
+                zoneId: zoneId,
+                selectedFont: selectedFont,
+                selectedColor: selectedColor,
+                colorValue: this.getColorValue(selectedColor),
+                previewElement: $preview[0],
+                previewAreaElement: $previewArea[0]
+            });
+            
+            // Get notes
+            const textNotes = $(`#text-notes-${zoneId}`).val() || '';
+            
+            // Save form data to positionConfigs
+            if (this.positionConfigs[zoneId]) {
+                this.positionConfigs[zoneId].text_line_1 = textLine1;
+                this.positionConfigs[zoneId].text_line_2 = textLine2;
+                this.positionConfigs[zoneId].text_line_3 = textLine3;
+                this.positionConfigs[zoneId].text_font = selectedFont;
+                this.positionConfigs[zoneId].text_color = selectedColor;
+                this.positionConfigs[zoneId].text_notes = textNotes;
+                
+                console.log('Updated position config for zone', zoneId, ':', this.positionConfigs[zoneId]);
+            }
+            
+            if (combinedText.trim()) {
+                // Update preview text
+                $preview.text(combinedText).removeClass('empty');
+                
+                // Apply font and color styling
+                $preview.css({
+                    'font-family': this.getFontFamily(selectedFont),
+                    'color': this.getColorValue(selectedColor),
+                    'font-weight': 'bold',
+                    'font-size': '18px',
+                    'display': 'block',
+                    'visibility': 'visible',
+                    'opacity': '1'
+                });
+                
+                // Apply !important styles using attr method
+                $preview.attr('style', 
+                    'font-family: ' + this.getFontFamily(selectedFont) + ' !important; ' +
+                    'color: ' + this.getColorValue(selectedColor) + ' !important; ' +
+                    'font-weight: bold !important; ' +
+                    'font-size: 18px !important; ' +
+                    'display: block !important; ' +
+                    'visibility: visible !important; ' +
+                    'opacity: 1 !important;'
+                );
+                
+                // Update preview area styling
+                $previewArea.css({
+                    'background-color': selectedColor === 'white' ? '#333' : '#fff',
+                    'border': selectedColor === 'white' ? '2px solid #333' : '2px solid #ddd'
+                });
+            } else {
+                // Reset to placeholder
+                $preview.text('Your text will appear here...').addClass('empty');
+                $preview.css({
+                    'font-family': 'inherit',
+                    'color': '#6b7280',
+                    'font-weight': 'normal',
+                    'font-size': 'inherit'
+                });
+                
+                $previewArea.css({
+                    'background-color': '#fff',
+                    'border': '1px solid #d1d5db'
+                });
+            }
         }
 
         loadMethods() {
@@ -1320,16 +2371,27 @@
                 // Update preview text
                 $preview.text(combinedText).removeClass('empty');
                 
-                // Apply font and color styling with important flags
+                // Apply font and color styling
                 $preview.css({
-                    'font-family': this.getFontFamily(selectedFont) + ' !important',
-                    'color': this.getColorValue(selectedColor) + ' !important',
-                    'font-weight': 'bold !important',
-                    'font-size': '18px !important',
-                    'display': 'block !important',
-                    'visibility': 'visible !important',
-                    'opacity': '1 !important'
+                    'font-family': this.getFontFamily(selectedFont),
+                    'color': this.getColorValue(selectedColor),
+                    'font-weight': 'bold',
+                    'font-size': '18px',
+                    'display': 'block',
+                    'visibility': 'visible',
+                    'opacity': '1'
                 });
+                
+                // Apply !important styles using attr method
+                $preview.attr('style', 
+                    'font-family: ' + this.getFontFamily(selectedFont) + ' !important; ' +
+                    'color: ' + this.getColorValue(selectedColor) + ' !important; ' +
+                    'font-weight: bold !important; ' +
+                    'font-size: 18px !important; ' +
+                    'display: block !important; ' +
+                    'visibility: visible !important; ' +
+                    'opacity: 1 !important;'
+                );
                 
                 // Update preview area styling
                 $previewArea.css({
@@ -1485,6 +2547,50 @@
             $breakdown.html(html);
         }
 
+        collectAllFormData() {
+            console.log('=== COLLECTING ALL FORM DATA ===');
+            
+            // Collect data for all configured positions
+            Object.keys(this.positionConfigs).forEach(zoneId => {
+                const config = this.positionConfigs[zoneId];
+                console.log('Collecting data for zone', zoneId, ':', config);
+                
+                if (config.content_type === 'text') {
+                    // Collect text form data
+                    const textLine1 = $(`#text-line-1-${zoneId}`).val() || '';
+                    const textLine2 = $(`#text-line-2-${zoneId}`).val() || '';
+                    const textLine3 = $(`#text-line-3-${zoneId}`).val() || '';
+                    const textFont = $(`#text-font-${zoneId}`).val() || 'arial';
+                    const textColor = $(`input[name="text_color_${zoneId}"]:checked`).val() || 'white';
+                    const textNotes = $(`#text-notes-${zoneId}`).val() || '';
+                    
+                    // Update position config
+                    config.text_line_1 = textLine1;
+                    config.text_line_2 = textLine2;
+                    config.text_line_3 = textLine3;
+                    config.text_font = textFont;
+                    config.text_color = textColor;
+                    config.text_notes = textNotes;
+                    
+                    console.log('Updated text config for zone', zoneId, ':', config);
+                    
+                } else if (config.content_type === 'logo') {
+                    // Collect logo form data
+                    const logoAlternative = $(`#logo-upload-section-${zoneId} input[name="logo_alternative_${zoneId}"]:checked`).val() || '';
+                    const logoNotes = $(`#logo-notes-${zoneId}`).val() || '';
+                    
+                    // Update position config
+                    config.logo_alternative = logoAlternative;
+                    config.logo_notes = logoNotes;
+                    
+                    console.log('Updated logo config for zone', zoneId, ':', config);
+                    console.log('Logo alternative collected:', logoAlternative);
+                }
+            });
+            
+            console.log('Final position configs:', this.positionConfigs);
+        }
+
         addToCart() {
             const $btn = $('#add-to-cart-btn');
             const originalText = $btn.text();
@@ -1496,39 +2602,60 @@
                 Adding to Cart...
             `);
             
-            // Collect all form data
-            const customizationData = {
-                zones: this.selectedZones.map(z => z.name),
-                method: this.selectedMethod,
-                content_type: this.contentType,
-                file_path: this.contentType === 'logo' ? (this.uploadedFile ? this.uploadedFile.filepath : null) : null,
-                text_content: this.contentType === 'text' ? this.customText : null, // Legacy field
-                setup_fee: this.contentType === 'logo' ? 8.95 : 2.95, // Different fees for logo vs text
-                application_fee: 7.99, // Will be calculated properly
-                total_cost: this.contentType === 'logo' ? 16.94 : 10.94 // Will be calculated properly
-            };
+            // Collect all form data before validation
+            this.collectAllFormData();
             
-            console.log('=== ADD TO CART DEBUG ===');
-            console.log('Content type:', this.contentType);
-            console.log('Uploaded file:', this.uploadedFile);
-            console.log('File path being sent:', customizationData.file_path);
-            console.log('Full customization data:', customizationData);
+        // Validate all selected positions before proceeding
+        const validationResult = this.validateAllPositions();
+        if (!validationResult.isValid) {
+            // Reset button
+            $btn.prop('disabled', false);
+            $btn.text(originalText);
             
-            // Add new text configuration fields
-            if (this.contentType === 'text') {
-                customizationData.text_line_1 = $('#text-line-1').val() || '';
-                customizationData.text_line_2 = $('#text-line-2').val() || '';
-                customizationData.text_line_3 = $('#text-line-3').val() || '';
-                customizationData.text_font = $('#text-font').val() || 'arial';
-                customizationData.text_color = $('input[name="text_color"]:checked').val() || 'white';
-                customizationData.text_notes = $('#text-notes').val() || '';
+            // Show validation errors
+            this.showValidationErrors(validationResult.errors);
+            return;
+        }
+        
+        // Collect all position configurations
+        const positionCustomizations = [];
+        
+        Object.values(this.positionConfigs).forEach(config => {
+            if (config.method && config.content_type) {
+                const positionData = {
+                    zone_id: config.zone_id,
+                    zone_name: config.zone_name,
+                    method: config.method,
+                    content_type: config.content_type,
+                    file_path: config.file_path || null,
+                    text_content: config.content_type === 'text' ? 
+                        [config.text_line_1, config.text_line_2, config.text_line_3].filter(line => line.trim()).join(' ') : null,
+                    text_line_1: config.text_line_1 || '',
+                    text_line_2: config.text_line_2 || '',
+                    text_line_3: config.text_line_3 || '',
+                    text_font: config.text_font || 'arial',
+                    text_color: config.text_color || 'white',
+                    text_notes: config.text_notes || '',
+                    logo_alternative: config.logo_alternative || '',
+                    logo_notes: config.logo_notes || '',
+                    application_fee: 7.99 // Will be calculated properly
+                };
+                
+                positionCustomizations.push(positionData);
             }
-            
-            // Add logo alternative options
-            if (this.contentType === 'logo') {
-                customizationData.logo_alternative = $('input[name="logo_alternative"]:checked').val() || '';
-                customizationData.logo_notes = $('#logo-notes').val() || '';
-            }
+        });
+        
+        console.log('=== ADD TO CART DEBUG ===');
+        console.log('Position configurations:', this.positionConfigs);
+        console.log('Position customizations:', positionCustomizations);
+        
+        if (positionCustomizations.length === 0) {
+            // Reset button
+            $btn.prop('disabled', false);
+            $btn.text(originalText);
+            alert('Please configure at least one position before adding to cart.');
+            return;
+        }
             
             $.ajax({
                 url: wcCustomizerWizard.ajaxUrl,
@@ -1536,25 +2663,25 @@
                 data: {
                     action: 'wc_customizer_add_to_cart',
                     cart_item_key: this.cartItemKey,
-                    customization_data: customizationData,
+                position_customizations: positionCustomizations,
                     nonce: wcCustomizerWizard.cartNonce
                 },
                 success: (response) => {
                     if (response.success) {
-                        if (this.isCustomizationPage()) {
-                            // On customization page, redirect to return URL
-                            $btn.html('✅ Saving...');
-                            setTimeout(() => {
-                                window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
-                            }, 1000);
-                        } else {
-                            // Modal behavior (for backward compatibility)
+                    if (this.isCustomizationPage()) {
+                        // On customization page, redirect to return URL
+                        $btn.html('✅ Saving...');
+                        setTimeout(() => {
+                            window.location.href = this.returnUrl || wcCustomizerWizard.cartUrl;
+                        }, 1000);
+                    } else {
+                        // Modal behavior (for backward compatibility)
                         $btn.html('✅ Added Successfully!');
                         setTimeout(() => {
                         this.closeWizard();
                         location.reload(); // Refresh cart
                         }, 1000);
-                        }
+                    }
                     } else {
                         // Reset button
                         $btn.prop('disabled', false);
@@ -1570,6 +2697,114 @@
                     $btn.prop('disabled', false);
                     $btn.text(originalText);
                     this.showError($('#customization-summary'), 'Failed to add customization to cart. Please try again.');
+                }
+            });
+        }
+
+    validateAllPositions() {
+        console.log('=== VALIDATING ALL POSITIONS ===');
+        
+        const errors = [];
+        const selectedPositions = this.getSelectedPositions();
+        
+        console.log('Selected positions:', selectedPositions);
+        console.log('Position configs:', this.positionConfigs);
+        
+        if (selectedPositions.length === 0) {
+            errors.push({
+                type: 'no_positions',
+                message: 'Please select at least one position to customize.',
+                position: null
+            });
+            return { isValid: false, errors };
+        }
+        
+        selectedPositions.forEach(zoneId => {
+            const config = this.positionConfigs[zoneId];
+            const zoneName = config?.zone_name || `Position ${zoneId}`;
+            
+            console.log(`Validating position ${zoneId} (${zoneName}):`, config);
+            
+            // Check if method is selected
+            if (!config.method) {
+                errors.push({
+                    type: 'missing_method',
+                    message: `${zoneName}: Please select an application method (embroidery or print).`,
+                    position: zoneId,
+                    zoneName: zoneName
+                });
+                return;
+            }
+            
+            // Check if content type is selected
+            if (!config.content_type) {
+                errors.push({
+                    type: 'missing_content_type',
+                    message: `${zoneName}: Please select a content type (logo or text).`,
+                    position: zoneId,
+                    zoneName: zoneName
+                });
+                return;
+            }
+            
+            // Validate content based on type
+            if (config.content_type === 'logo') {
+                // For logo: must have file uploaded OR alternative option selected
+                if (!config.file_path && !config.logo_alternative) {
+                    errors.push({
+                        type: 'missing_logo_content',
+                        message: `${zoneName}: Please upload a logo file or select an alternative option.`,
+                        position: zoneId,
+                        zoneName: zoneName
+                    });
+                }
+            } else if (config.content_type === 'text') {
+                // For text: must have at least one text line filled
+                const hasText = config.text_line_1?.trim() || 
+                               config.text_line_2?.trim() || 
+                               config.text_line_3?.trim();
+                
+                if (!hasText) {
+                    errors.push({
+                        type: 'missing_text_content',
+                        message: `${zoneName}: Please enter at least one line of text.`,
+                        position: zoneId,
+                        zoneName: zoneName
+                    });
+                }
+            }
+        });
+        
+        console.log('Validation result:', { isValid: errors.length === 0, errors });
+        return { isValid: errors.length === 0, errors };
+    }
+
+    showValidationErrors(errors) {
+        console.log('=== SHOWING VALIDATION ERRORS ===', errors);
+        
+        // Create error message
+        let errorMessage = 'Please complete the following before saving:\n\n';
+        
+        errors.forEach((error, index) => {
+            errorMessage += `${index + 1}. ${error.message}\n`;
+        });
+        
+        // Show alert with validation errors
+        alert(errorMessage);
+        
+        // Highlight problematic positions in the UI
+        errors.forEach(error => {
+            if (error.position) {
+                // Highlight the tab for this position
+                const $tab = $(`.config-tab-btn[data-zone-id="${error.position}"]`);
+                if ($tab.length) {
+                    $tab.addClass('validation-error');
+                    
+                    // Remove highlight after 3 seconds
+                    setTimeout(() => {
+                        $tab.removeClass('validation-error');
+                    }, 3000);
+                }
                 }
             });
         }
@@ -1642,7 +2877,7 @@
                         // Load product info, zones and methods for the product
                         this.loadProductInfo();
                         this.loadZones();
-                        this.loadMethods();
+                        // loadMethods() removed - now handled per position in renderPositionTabs()
                         
                         // Show modal directly instead of calling openWizard with fake event
                         $('#wc-customizer-wizard-modal').fadeIn(300);

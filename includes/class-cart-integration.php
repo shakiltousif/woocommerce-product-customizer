@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Cart integration class
  *
@@ -13,7 +14,8 @@ if (!defined('ABSPATH')) {
 /**
  * Cart Integration class
  */
-class WC_Product_Customizer_Cart_Integration {
+class WC_Product_Customizer_Cart_Integration
+{
 
     /**
      * Instance
@@ -27,7 +29,8 @@ class WC_Product_Customizer_Cart_Integration {
      *
      * @return WC_Product_Customizer_Cart_Integration
      */
-    public static function get_instance() {
+    public static function get_instance()
+    {
         if (null === self::$instance) {
             self::$instance = new self();
         }
@@ -37,7 +40,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Constructor
      */
-    private function __construct() {
+    private function __construct()
+    {
         // Enqueue assets
         add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
 
@@ -61,7 +65,7 @@ class WC_Product_Customizer_Cart_Integration {
         add_filter('woocommerce_cart_item_price', array($this, 'modify_cart_item_price'), 10, 3);
         
         // DISABLED: Template modification hooks that cause raw HTML issues
-        // add_filter('woocommerce_cart_item_name', array($this, 'modify_cart_item_name'), 10, 3);
+        add_filter('woocommerce_cart_item_name', array($this, 'modify_cart_item_name'), 10, 3);
         // add_action('woocommerce_cart_item_after_thumbnail', array($this, 'add_customization_button'), 10, 2);
         
         // DISABLED: More aggressive hooks that cause raw HTML issues
@@ -113,7 +117,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Enqueue frontend assets
      */
-    public function enqueue_assets() {
+    public function enqueue_assets()
+    {
         // Load on cart, checkout, and order pages
         if (is_cart() || is_checkout() || is_wc_endpoint_url('order-received') || is_wc_endpoint_url('view-order') || is_account_page()) {
             // Enqueue CSS
@@ -159,7 +164,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Enqueue admin assets
      */
-    public function enqueue_admin_assets($hook) {
+    public function enqueue_admin_assets($hook)
+    {
         // Only load on order edit pages
         if ($hook === 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) === 'shop_order') {
             wp_enqueue_style(
@@ -177,7 +183,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param array $cart_item
      * @param string $cart_item_key
      */
-    public function add_customization_button($cart_item, $cart_item_key) {
+    public function add_customization_button($cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
         
         // Check if product supports customization
@@ -199,11 +206,47 @@ class WC_Product_Customizer_Cart_Integration {
         
         // If already customized, show edit button and summary
         if (isset($cart_item['customization_data'])) {
-            echo '<div class="customization-item">';
-            echo '<div class="customization-icon">🎨</div>';
             echo '<div class="customization-details">';
+            echo '<div class="customization-details-header">';
+            echo '<h3 class="customization-details-title">Customization Details</h3>';
+            echo '</div>';
             
             $data = $cart_item['customization_data'];
+
+            // Check if it's multiple positions (new format) or single customization (legacy)
+            if (is_array($data) && isset($data[0]['zone_id'])) {
+                // Multiple positions format
+                foreach ($data as $index => $position) {
+                    echo '<div class="position-customization">';
+                    echo '<div class="customization-type">' . esc_html($position['zone_name'] . ' - ' . ucfirst($position['content_type']) . ' ' . ucfirst($position['method'])) . '</div>';
+
+                    // Show logo preview if it's a logo customization
+                    if ($position['content_type'] === 'logo' && !empty($position['file_path'])) {
+                        echo '<div class="customization-logo-preview">';
+                        echo '<strong>' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
+
+                        // Get the file URL
+                        $upload_dir = wp_upload_dir();
+                        $file_url = $upload_dir['baseurl'] . '/customization-files/' . $position['file_path'];
+
+                        // Check if it's an image file
+                        $extension = strtolower(pathinfo($position['file_path'], PATHINFO_EXTENSION));
+                        $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
+
+                        if (in_array($extension, $image_extensions)) {
+                            echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 100px; max-height: 100px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">';
+                        } else {
+                            echo '<div style="background: #f0f0f0; padding: 10px; margin-top: 5px; border-radius: 4px; text-align: center; font-size: 12px;">';
+                            echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+                            echo '</div>';
+                        }
+                        echo '</div>';
+                    }
+
+                    echo '</div>';
+                }
+            } else {
+                // Legacy single customization format
             $method = ucfirst($data['method'] ?? '');
             $content_type = ucfirst($data['content_type'] ?? '');
             
@@ -212,54 +255,59 @@ class WC_Product_Customizer_Cart_Integration {
             if (!empty($data['zones'])) {
                 echo '<div class="customization-zones">' . esc_html(implode(', ', $data['zones'] ?? array())) . '</div>';
             }
-            
-            // Show logo preview if it's a logo customization
-            if ($data['content_type'] === 'logo' && !empty($data['file_path'])) {
-                echo '<div class="customization-logo-preview">';
-                echo '<strong>' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
-                
-                // Get the file URL
-                $upload_dir = wp_upload_dir();
-                $file_url = $upload_dir['baseurl'] . '/customization-files/' . $data['file_path'];
-                
-                // Check if it's an image file
-                $extension = strtolower(pathinfo($data['file_path'], PATHINFO_EXTENSION));
-                $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
-                
-                if (in_array($extension, $image_extensions)) {
-                    echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 100px; max-height: 100px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">';
-                } else {
-                    echo '<div style="background: #f0f0f0; padding: 10px; margin-top: 5px; border-radius: 4px; text-align: center; font-size: 12px;">';
-                    echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+
+                // Show logo preview if it's a logo customization
+                if (isset($data['content_type']) && $data['content_type'] === 'logo' && !empty($data['file_path'])) {
+                    echo '<div class="customization-logo-preview">';
+                    echo '<strong>' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
+
+                    // Get the file URL
+                    $upload_dir = wp_upload_dir();
+                    $file_url = $upload_dir['baseurl'] . '/customization-files/' . $data['file_path'];
+
+                    // Check if it's an image file
+                    $extension = strtolower(pathinfo($data['file_path'], PATHINFO_EXTENSION));
+                    $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
+
+                    if (in_array($extension, $image_extensions)) {
+                        echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 100px; max-height: 100px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">';
+                    } else {
+                        echo '<div style="background: #f0f0f0; padding: 10px; margin-top: 5px; border-radius: 4px; text-align: center; font-size: 12px;">';
+                        echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+                        echo '</div>';
+                    }
                     echo '</div>';
-                }
-                echo '</div>';
             }
             
             if (!empty($data['total_cost'])) {
                 echo '<div class="customization-cost">£' . esc_html(number_format($data['total_cost'], 2)) . '</div>';
+                }
             }
             
             echo '</div>';
-            echo '<div class="customization-buttons">';
-            echo '<a href="' . esc_url($this->get_customization_url($product_id, $cart_item_key, null, true)) . '" class="button wc-customizer-edit-link">';
-            echo esc_html__('Edit', 'wc-product-customizer');
+            echo '<div class="customization-actions">';
+            echo '<a href="' . esc_url($this->get_customization_url($product_id, $cart_item_key, null, true)) . '" class="wc-customizer-edit-link">';
+            echo esc_html__('Edit Customization', 'wc-product-customizer');
             echo '</a>';
-            echo '<button type="button" class="button remove-customization-btn" data-cart-key="' . esc_attr($cart_item_key) . '">';
-            echo esc_html__('Remove', 'wc-product-customizer');
+            echo '<button type="button" class="wc-customizer-remove-link" data-cart-key="' . esc_attr($cart_item_key) . '">';
+            echo esc_html__('Remove Customization', 'wc-product-customizer');
             echo '</button>';
             echo '</div>';
             echo '</div>';
             
             // Add another logo button
-            echo '<a href="' . esc_url($customize_url) . '" class="button wc-customizer-add-link">';
-            echo esc_html__('Add another logo to this item', 'wc-product-customizer');
+            echo '<div class="customization-actions">';
+            echo '<a href="' . esc_url($customize_url) . '" class="wc-customizer-add-link">';
+            echo esc_html__('Add Another Customization', 'wc-product-customizer');
             echo '</a>';
+            echo '</div>';
         } else {
             // Show add customization button
-            echo '<a href="' . esc_url($customize_url) . '" class="button wc-customizer-add-link">';
-            echo esc_html__('Add logo to this item', 'wc-product-customizer');
+            echo '<div class="customization-actions">';
+            echo '<a href="' . esc_url($customize_url) . '" class="wc-customizer-add-link">';
+            echo esc_html__('Add Customization', 'wc-product-customizer');
             echo '</a>';
+            echo '</div>';
         }
         
         echo '</div>';
@@ -271,29 +319,30 @@ class WC_Product_Customizer_Cart_Integration {
      * @param int $product_id
      * @return bool
      */
-    private function is_customization_enabled($product_id) {
+    private function is_customization_enabled($product_id)
+    {
         // Check if customization is enabled
         $enabled = get_post_meta($product_id, '_customization_enabled', true);
         if ($enabled !== 'yes' && $enabled !== '1' && $enabled != 1) {
             return false;
         }
-        
+
         // Check if product has a valid category configuration
         $db = WC_Product_Customizer_Database::get_instance();
         $config = $db->get_product_customization_config($product_id);
-        
+
         if (!$config || !$config->enabled) {
             return false;
         }
-        
+
         // Check if config has at least one zone and one type
         $zones = maybe_unserialize($config->available_zones);
         $types = maybe_unserialize($config->available_types);
-        
+
         if (empty($zones) || !is_array($zones) || empty($types) || !is_array($types)) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -306,22 +355,23 @@ class WC_Product_Customizer_Cart_Integration {
      * @param bool $is_edit
      * @return string
      */
-    private function get_customization_url($product_id, $cart_key, $return_url = null, $is_edit = false) {
+    private function get_customization_url($product_id, $cart_key, $return_url = null, $is_edit = false)
+    {
         if (!$return_url) {
             $return_url = wc_get_cart_url();
         }
-        
+
         $args = array(
             'wc_customize' => '1',
             'product_id' => $product_id,
             'cart_key' => $cart_key,
             'return_url' => urlencode($return_url)
         );
-        
+
         if ($is_edit) {
             $args['edit'] = '1';
         }
-        
+
         return add_query_arg($args, home_url('/'));
     }
 
@@ -333,7 +383,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param int $variation_id
      * @return array
      */
-    public function save_customization_to_cart($cart_item_data, $product_id, $variation_id) {
+    public function save_customization_to_cart($cart_item_data, $product_id, $variation_id)
+    {
         if (isset($_POST['customization_data'])) {
             $customization_data = $this->sanitize_customization_data($_POST['customization_data']);
             
@@ -359,7 +410,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param array $data
      * @return array
      */
-    private function sanitize_customization_data($data) {
+    private function sanitize_customization_data($data)
+    {
         $sanitized = array();
         
         if (isset($data['zones']) && is_array($data['zones'])) {
@@ -384,37 +436,37 @@ class WC_Product_Customizer_Cart_Integration {
         if (isset($data['text_content'])) {
             $sanitized['text_content'] = sanitize_textarea_field($data['text_content']);
         }
-        
+
         // New text configuration fields
         if (isset($data['text_line_1'])) {
             $sanitized['text_line_1'] = sanitize_text_field($data['text_line_1']);
         }
-        
+
         if (isset($data['text_line_2'])) {
             $sanitized['text_line_2'] = sanitize_text_field($data['text_line_2']);
         }
-        
+
         if (isset($data['text_line_3'])) {
             $sanitized['text_line_3'] = sanitize_text_field($data['text_line_3']);
         }
-        
+
         if (isset($data['text_font'])) {
             $sanitized['text_font'] = sanitize_text_field($data['text_font']);
         }
-        
+
         if (isset($data['text_color'])) {
             $sanitized['text_color'] = sanitize_text_field($data['text_color']);
         }
-        
+
         if (isset($data['text_notes'])) {
             $sanitized['text_notes'] = sanitize_textarea_field($data['text_notes']);
         }
-        
+
         // Logo alternative options
         if (isset($data['logo_alternative'])) {
             $sanitized['logo_alternative'] = sanitize_text_field($data['logo_alternative']);
         }
-        
+
         if (isset($data['logo_notes'])) {
             $sanitized['logo_notes'] = sanitize_textarea_field($data['logo_notes']);
         }
@@ -441,7 +493,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param array $cart_item
      * @return array
      */
-    public function display_customization_in_cart($item_data, $cart_item) {
+    public function display_customization_in_cart($item_data, $cart_item)
+    {
         if (isset($cart_item['customization_data'])) {
             $data = $cart_item['customization_data'];
             
@@ -480,7 +533,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Migrate existing cart items to use new file paths
      */
-    public function migrate_cart_file_paths() {
+    public function migrate_cart_file_paths()
+    {
         $cart = WC()->cart->get_cart();
         $updated = false;
         
@@ -508,7 +562,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $file_path
      * @return string
      */
-    private function migrate_file_path($file_path) {
+    private function migrate_file_path($file_path)
+    {
         // Validate input
         if (empty($file_path) || !is_string($file_path)) {
             return '';
@@ -535,7 +590,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $file_path
      * @return string
      */
-    private function get_file_url_from_path($file_path) {
+    private function get_file_url_from_path($file_path)
+    {
         // Validate input
         if (empty($file_path) || !is_string($file_path)) {
             return '';
@@ -569,10 +625,11 @@ class WC_Product_Customizer_Cart_Integration {
      * @param array $data
      * @return string
      */
-    private function format_customization_display($data) {
+    private function format_customization_display($data)
+    {
         $display = '';
         
-        if (!empty($data['method']) && !empty($data['content_type'])) {
+        if (!empty($data['method']) && isset($data['content_type']) && !empty($data['content_type'])) {
             $display .= ucfirst($data['content_type']) . ' ' . ucfirst($data['method']);
         }
         
@@ -581,7 +638,7 @@ class WC_Product_Customizer_Cart_Integration {
         }
         
         // Display text content based on content type
-        if ($data['content_type'] === 'text') {
+        if (isset($data['content_type']) && $data['content_type'] === 'text') {
             // New text configuration
             $text_lines = array();
             if (!empty($data['text_line_1'])) {
@@ -593,10 +650,10 @@ class WC_Product_Customizer_Cart_Integration {
             if (!empty($data['text_line_3'])) {
                 $text_lines[] = $data['text_line_3'];
             }
-            
+
             if (!empty($text_lines)) {
                 $display .= ' - "' . implode(' ', $text_lines) . '"';
-                
+
                 // Add font and color info
                 $text_details = array();
                 if (!empty($data['text_font'])) {
@@ -605,26 +662,111 @@ class WC_Product_Customizer_Cart_Integration {
                 if (!empty($data['text_color'])) {
                     $text_details[] = ucfirst($data['text_color']) . ' color';
                 }
-                
+
                 if (!empty($text_details)) {
                     $display .= ' (' . implode(', ', $text_details) . ')';
                 }
             }
-            
+
+            // Add text notes if available
+            if (!empty($data['text_notes'])) {
+                $display .= ' - Notes: ' . esc_html($data['text_notes']);
+            }
+
             // Legacy text content (for backward compatibility)
             if (empty($text_lines) && !empty($data['text_content'])) {
                 $display .= ' - "' . $data['text_content'] . '"';
             }
         } else {
             // Logo content
-            if (!empty($data['file_path'])) {
-                $display .= ' - ' . __('Logo uploaded', 'wc-product-customizer');
+        if (!empty($data['file_path'])) {
+            $display .= ' - ' . __('Logo uploaded', 'wc-product-customizer');
             } elseif (!empty($data['logo_alternative'])) {
-                if ($data['logo_alternative'] === 'contact_later') {
+                if (isset($data['logo_alternative']) && $data['logo_alternative'] === 'contact_later') {
                     $display .= ' - ' . __('Logo to be provided later', 'wc-product-customizer');
-                } elseif ($data['logo_alternative'] === 'already_have') {
+                } elseif (isset($data['logo_alternative']) && $data['logo_alternative'] === 'already_have') {
                     $display .= ' - ' . __('Logo already on file', 'wc-product-customizer');
                 }
+            }
+
+            // Add logo notes if available
+            if (!empty($data['logo_notes'])) {
+                $display .= ' - Notes: ' . esc_html($data['logo_notes']);
+            }
+        }
+
+        return $display;
+    }
+
+    /**
+     * Format position customization display
+     *
+     * @param array $position
+     * @return string
+     */
+    private function format_position_display($position)
+    {
+        $display = '';
+
+        if (!empty($position['method']) && !empty($position['content_type'])) {
+            $display .= ucfirst($position['content_type']) . ' ' . ucfirst($position['method']);
+        }
+
+        // Display text content based on content type
+        if ($position['content_type'] === 'text') {
+            // New text configuration
+            $text_lines = array();
+            if (!empty($position['text_line_1'])) {
+                $text_lines[] = $position['text_line_1'];
+            }
+            if (!empty($position['text_line_2'])) {
+                $text_lines[] = $position['text_line_2'];
+            }
+            if (!empty($position['text_line_3'])) {
+                $text_lines[] = $position['text_line_3'];
+            }
+
+            if (!empty($text_lines)) {
+                $display .= ' - "' . implode(' ', $text_lines) . '"';
+
+                // Add font and color info
+                $text_details = array();
+                if (!empty($position['text_font'])) {
+                    $text_details[] = ucfirst($position['text_font']) . ' font';
+                }
+                if (!empty($position['text_color'])) {
+                    $text_details[] = ucfirst($position['text_color']) . ' color';
+                }
+
+                if (!empty($text_details)) {
+                    $display .= ' (' . implode(', ', $text_details) . ')';
+                }
+            }
+
+            // Add text notes if available
+            if (!empty($position['text_notes'])) {
+                $display .= ' - Notes: ' . esc_html($position['text_notes']);
+            }
+
+            // Legacy text content (for backward compatibility)
+            if (empty($text_lines) && !empty($position['text_content'])) {
+                $display .= ' - "' . $position['text_content'] . '"';
+            }
+        } else {
+            // Logo content
+            if (!empty($position['file_path'])) {
+                $display .= ' - ' . __('Logo uploaded', 'wc-product-customizer');
+            } elseif (!empty($position['logo_alternative'])) {
+                if ($position['logo_alternative'] === 'contact_later') {
+                    $display .= ' - ' . __('Logo to be provided later', 'wc-product-customizer');
+                } elseif ($position['logo_alternative'] === 'already_have') {
+                    $display .= ' - ' . __('Logo already on file', 'wc-product-customizer');
+                }
+            }
+
+            // Add logo notes if available
+            if (!empty($position['logo_notes'])) {
+                $display .= ' - Notes: ' . esc_html($position['logo_notes']);
             }
         }
         
@@ -634,7 +776,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Add customization fees to cart
      */
-    public function add_customization_fees() {
+    public function add_customization_fees()
+    {
         if (is_admin() && !defined('DOING_AJAX')) {
             return;
         }
@@ -676,7 +819,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_cart_item_price($price, $cart_item, $cart_item_key) {
+    public function modify_cart_item_price($price, $cart_item, $cart_item_key)
+    {
         // Keep original price, fees are added separately
         return $price;
     }
@@ -689,11 +833,71 @@ class WC_Product_Customizer_Cart_Integration {
      * @param array $values
      * @param WC_Order $order
      */
-    public function save_customization_to_order($item, $cart_item_key, $values, $order) {
+    public function save_customization_to_order($item, $cart_item_key, $values, $order)
+    {
         if (isset($values['customization_data'])) {
             $data = $values['customization_data'];
             
+            // Check if it's multiple positions (new format) or single customization (legacy)
+            if (is_array($data) && isset($data[0]['zone_id'])) {
+                // Multiple positions format
+                $this->save_multiple_position_customization($item, $cart_item_key, $values, $order, $data);
+            } else {
+                // Legacy single customization format
+                $this->save_single_customization($item, $cart_item_key, $values, $order, $data);
+            }
+        }
+    }
+
+    private function save_multiple_position_customization($item, $cart_item_key, $values, $order, $position_customizations)
+    {
+        // Calculate pricing
+        $pricing = $this->calculate_multiple_position_pricing($position_customizations, $values['quantity']);
+
+        // Save group data
+        $db = WC_Product_Customizer_Database::get_instance();
+        $group_id = $db->save_customization_order_group(array(
+            'order_id' => $order->get_id(),
+            'cart_item_key' => $cart_item_key,
+            'product_id' => $values['product_id'],
+            'group_setup_fee' => $pricing['setup_fee'],
+            'total_application_fee' => $pricing['application_fee'],
+            'total_cost' => $pricing['total']
+        ));
+
+        // Save each position separately
+        foreach ($position_customizations as $position) {
             // Save as order item meta
+            $item->add_meta_data('_customization_data', $position);
+            $item->add_meta_data('_customization_display', $this->format_position_display($position));
+
+            // Save to custom table for reporting
+            $db->save_customization_order(array(
+                'order_id' => $order->get_id(),
+                'cart_item_key' => $cart_item_key,
+                'product_id' => $values['product_id'],
+                'zone_id' => $position['zone_id'],
+                'position_name' => $position['zone_name'],
+                'method' => $position['method'],
+                'content_type' => $position['content_type'],
+                'file_path' => $position['file_path'],
+                'text_content' => $position['text_content'],
+                'text_line_1' => $position['text_line_1'],
+                'text_line_2' => $position['text_line_2'],
+                'text_line_3' => $position['text_line_3'],
+                'text_font' => $position['text_font'],
+                'text_color' => $position['text_color'],
+                'text_notes' => $position['text_notes'],
+                'logo_alternative' => $position['logo_alternative'],
+                'logo_notes' => $position['logo_notes'],
+                'application_fee' => $position['application_fee']
+            ));
+        }
+    }
+
+    private function save_single_customization($item, $cart_item_key, $values, $order, $data)
+    {
+        // Legacy single customization processing
             $item->add_meta_data('_customization_data', $data);
             $item->add_meta_data('_customization_display', $this->format_customization_display($data));
             
@@ -703,24 +907,22 @@ class WC_Product_Customizer_Cart_Integration {
                 'order_id' => $order->get_id(),
                 'cart_item_key' => $cart_item_key,
                 'product_id' => $values['product_id'],
-                'zone_ids' => $data['zones'] ?? array(),
+            'zone_id' => 0, // Legacy format doesn't have zone_id
+            'position_name' => implode(', ', $data['zones'] ?? array()),
                 'method' => $data['method'] ?? '',
                 'content_type' => $data['content_type'] ?? '',
                 'file_path' => $data['file_path'] ?? '',
-                'text_content' => $data['text_content'] ?? '', // Legacy field
-                'text_line_1' => $data['text_line_1'] ?? '',
-                'text_line_2' => $data['text_line_2'] ?? '',
-                'text_line_3' => $data['text_line_3'] ?? '',
-                'text_font' => $data['text_font'] ?? '',
-                'text_color' => $data['text_color'] ?? '',
-                'text_notes' => $data['text_notes'] ?? '',
-                'logo_alternative' => $data['logo_alternative'] ?? '',
-                'logo_notes' => $data['logo_notes'] ?? '',
-                'setup_fee' => $data['setup_fee'] ?? 0,
-                'application_fee' => $data['application_fee'] ?? 0,
-                'total_cost' => $data['total_cost'] ?? 0
-            ));
-        }
+                'text_content' => $data['text_content'] ?? '',
+            'text_line_1' => $data['text_line_1'] ?? '',
+            'text_line_2' => $data['text_line_2'] ?? '',
+            'text_line_3' => $data['text_line_3'] ?? '',
+            'text_font' => $data['text_font'] ?? '',
+            'text_color' => $data['text_color'] ?? '',
+            'text_notes' => $data['text_notes'] ?? '',
+            'logo_alternative' => $data['logo_alternative'] ?? '',
+            'logo_notes' => $data['logo_notes'] ?? '',
+            'application_fee' => $data['application_fee'] ?? 0
+        ));
     }
 
     /**
@@ -730,7 +932,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param WC_Order_Item $item
      * @param WC_Order $order
      */
-    public function display_customization_in_order($item_id, $item, $order) {
+    public function display_customization_in_order($item_id, $item, $order)
+    {
         $customization_data = $item->get_meta('_customization_data');
         
         if ($customization_data) {
@@ -776,7 +979,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param WC_Order_Item_Product $item
      * @param bool $is_visible
      */
-    public function display_customization_in_order_item($item_name, $item, $is_visible) {
+    public function display_customization_in_order_item($item_name, $item, $is_visible)
+    {
         $customization_data = $item->get_meta('_customization_data');
         
         if ($customization_data && $is_visible) {
@@ -820,7 +1024,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param WC_Order_Item $item
      * @param WC_Order $order
      */
-    public function display_customization_in_emails($item_id, $item, $order) {
+    public function display_customization_in_emails($item_id, $item, $order)
+    {
         $customization_display = $item->get_meta('_customization_display');
         
         if ($customization_display) {
@@ -834,50 +1039,150 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * AJAX handler for adding customization to cart
      */
-    public function ajax_add_customization_to_cart() {
+    public function ajax_add_customization_to_cart()
+    {
         check_ajax_referer('wc_customizer_cart', 'nonce');
         
         $cart_item_key = sanitize_text_field($_POST['cart_item_key']);
+
+        // Check if we have position customizations (new format) or single customization (legacy)
+        if (isset($_POST['position_customizations']) && is_array($_POST['position_customizations'])) {
+            $position_customizations = $this->sanitize_position_customizations($_POST['position_customizations']);
+            $this->process_multiple_position_customizations($cart_item_key, $position_customizations);
+        } else {
+            // Legacy single customization format
         $customization_data = $this->sanitize_customization_data($_POST['customization_data']);
-        
-        // Debug logging
-        error_log('=== AJAX ADD TO CART DEBUG ===');
-        error_log('Cart item key: ' . $cart_item_key);
-        error_log('Raw customization data: ' . print_r($_POST['customization_data'], true));
-        error_log('Sanitized customization data: ' . print_r($customization_data, true));
-        error_log('File path: ' . ($customization_data['file_path'] ?? 'NOT SET'));
-        
-        // Update cart item with customization data
+            $this->process_single_customization($cart_item_key, $customization_data);
+        }
+
+        wp_send_json_success(array(
+            'message' => __('Customization added successfully', 'wc-product-customizer'),
+            'cart_hash' => WC()->cart->get_cart_hash()
+        ));
+    }
+
+    private function sanitize_position_customizations($customizations)
+    {
+        $sanitized = array();
+
+        foreach ($customizations as $customization) {
+            $sanitized[] = array(
+                'zone_id' => intval($customization['zone_id']),
+                'zone_name' => sanitize_text_field($customization['zone_name']),
+                'method' => sanitize_text_field($customization['method']),
+                'content_type' => sanitize_text_field($customization['content_type']),
+                'file_path' => isset($customization['file_path']) ? basename(sanitize_text_field($customization['file_path'])) : '',
+                'text_content' => isset($customization['text_content']) ? sanitize_textarea_field($customization['text_content']) : '',
+                'text_line_1' => isset($customization['text_line_1']) ? sanitize_text_field($customization['text_line_1']) : '',
+                'text_line_2' => isset($customization['text_line_2']) ? sanitize_text_field($customization['text_line_2']) : '',
+                'text_line_3' => isset($customization['text_line_3']) ? sanitize_text_field($customization['text_line_3']) : '',
+                'text_font' => isset($customization['text_font']) ? sanitize_text_field($customization['text_font']) : '',
+                'text_color' => isset($customization['text_color']) ? sanitize_text_field($customization['text_color']) : '',
+                'text_notes' => isset($customization['text_notes']) ? sanitize_textarea_field($customization['text_notes']) : '',
+                'logo_alternative' => isset($customization['logo_alternative']) ? sanitize_text_field($customization['logo_alternative']) : '',
+                'logo_notes' => isset($customization['logo_notes']) ? sanitize_textarea_field($customization['logo_notes']) : '',
+                'application_fee' => isset($customization['application_fee']) ? floatval($customization['application_fee']) : 0
+            );
+        }
+
+        return $sanitized;
+    }
+
+    private function process_multiple_position_customizations($cart_item_key, $position_customizations)
+    {
+        // Update cart item with all position customizations
         $cart = WC()->cart->get_cart();
         
         if (isset($cart[$cart_item_key])) {
-            $cart[$cart_item_key]['customization_data'] = $customization_data;
-            
-            // Calculate fees
-            $pricing = WC_Product_Customizer_Pricing::get_instance();
-            $quantity = $cart[$cart_item_key]['quantity'];
-            $fees = $pricing->calculate_customization_fees($customization_data, $quantity);
-            $cart[$cart_item_key]['customization_fees'] = $fees;
-            
-            // Update cart
-            WC()->cart->set_cart_contents($cart);
-            WC()->cart->calculate_totals();
-            
-            wp_send_json_success(array(
-                'message' => __('Customization added successfully', 'wc-product-customizer'),
-                'cart_hash' => WC()->cart->get_cart_hash()
-            ));
-        } else {
-            wp_send_json_error(array(
-                'message' => __('Cart item not found', 'wc-product-customizer')
-            ));
+            $cart_item = $cart[$cart_item_key];
+
+            // Store all position customizations in cart item meta
+            $cart_item['customization_data'] = $position_customizations;
+
+            // Calculate pricing
+            $pricing = $this->calculate_multiple_position_pricing($position_customizations, $cart_item['quantity']);
+
+            // Update cart item
+            WC()->cart->cart_contents[$cart_item_key] = $cart_item;
+
+            // Add fees
+            $this->add_position_customization_fees($pricing);
+
+            // Save session
+            WC()->cart->set_session();
+        }
+    }
+
+    private function process_single_customization($cart_item_key, $customization_data)
+    {
+        // Legacy single customization processing
+        $cart = WC()->cart->get_cart();
+
+        if (isset($cart[$cart_item_key])) {
+            $cart_item = $cart[$cart_item_key];
+            $cart_item['customization_data'] = $customization_data;
+
+            // Calculate pricing
+            $pricing_engine = WC_Product_Customizer_Pricing::get_instance();
+            $pricing = $pricing_engine->calculate_customization_fees($customization_data, $cart_item['quantity']);
+
+            // Update cart item
+            WC()->cart->cart_contents[$cart_item_key] = $cart_item;
+
+            // Add fees
+            $this->add_position_customization_fees($pricing);
+
+            // Save session
+            WC()->cart->set_session();
+        }
+    }
+
+    private function calculate_multiple_position_pricing($position_customizations, $quantity)
+    {
+        $pricing_engine = WC_Product_Customizer_Pricing::get_instance();
+
+        // Get setup fee from first position (all positions share one setup fee)
+        $first_position = $position_customizations[0];
+        $setup_fee = $pricing_engine->get_setup_fee($first_position['method'], $first_position['content_type']);
+
+        // Calculate total application fee (sum of all positions)
+        $total_application_fee = 0;
+        foreach ($position_customizations as $position) {
+            $app_fee = $pricing_engine->get_application_cost($position['method'], $quantity);
+            $total_application_fee += $app_fee;
+        }
+
+        $total_cost = $setup_fee + $total_application_fee;
+
+        return array(
+            'setup_fee' => $setup_fee,
+            'application_fee' => $total_application_fee,
+            'total' => $total_cost
+        );
+    }
+
+    private function add_position_customization_fees($pricing)
+    {
+        if ($pricing['setup_fee'] > 0) {
+            WC()->cart->add_fee(
+                __('Customization Setup Fee', 'wc-product-customizer'),
+                $pricing['setup_fee']
+            );
+        }
+
+        if ($pricing['application_fee'] > 0) {
+            WC()->cart->add_fee(
+                __('Customization Application Fee', 'wc-product-customizer'),
+                $pricing['application_fee']
+            );
         }
     }
 
     /**
      * AJAX handler for editing customization
      */
-    public function ajax_edit_customization() {
+    public function ajax_edit_customization()
+    {
         check_ajax_referer('wc_customizer_cart', 'nonce');
         
         $cart_item_key = sanitize_text_field($_POST['cart_item_key']);
@@ -904,8 +1209,10 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_cart_item_name($product_name, $cart_item, $cart_item_key) {
+    public function modify_cart_item_name($product_name, $cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
+
         
         // Check if product supports customization
         if (!$this->is_customization_enabled($product_id)) {
@@ -924,9 +1231,227 @@ class WC_Product_Customizer_Cart_Integration {
         ?>
         <div class="customization-actions" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" data-product-id="<?php echo esc_attr($product_id); ?>" style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #f0f0f0;">
             <?php if (isset($cart_item['customization_data'])): ?>
-                <div style="margin-bottom: 8px; font-size: 12px; color: #666; font-weight: 500;">Customization Options:</div>
-                <button type="button" class="button edit-customization-btn" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" data-product-id="<?php echo esc_attr($product_id); ?>" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 8px 16px; margin-right: 8px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</button>
-                <button type="button" class="button remove-customization-btn" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" style="background: #dc3545; color: white; border: 1px solid #dc3545; padding: 8px 16px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Remove Customization</button>
+                <div style="margin-bottom: 8px; font-size: 12px; color: #666; font-weight: 500;">Customization Details:</div>
+                <?php
+                $data = $cart_item['customization_data'];
+
+                // Check if it's multiple positions (new format) or single customization (legacy)
+                if (is_array($data) && isset($data[0]['zone_id'])) {
+                    // Multiple positions format
+                    foreach ($data as $index => $position) {
+                        echo '<div class="position-customization" style="margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px;">';
+                        echo '<div class="customization-type" style="font-weight: 600; color: #333;">' . esc_html($position['zone_name'] . ' - ' . ucfirst($position['content_type']) . ' ' . ucfirst($position['method'])) . '</div>';
+
+                        // Show logo preview if it's a logo customization
+                        if (isset($position['content_type']) && $position['content_type'] === 'logo' && !empty($position['file_path'])) {
+                            echo '<div class="customization-logo-preview" style="margin-top: 5px;">';
+                            echo '<strong style="font-size: 11px;">' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
+
+                            // Get the file URL
+                            $upload_dir = wp_upload_dir();
+                            $file_url = $upload_dir['baseurl'] . '/customization-files/' . $position['file_path'];
+
+                            // Check if it's an image file
+                            $extension = strtolower(pathinfo($position['file_path'], PATHINFO_EXTENSION));
+                            $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
+
+                            if (in_array($extension, $image_extensions)) {
+                                echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 60px; max-height: 60px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">';
+                            } else {
+                                echo '<div style="background: #f0f0f0; padding: 5px; margin-top: 3px; border-radius: 3px; text-align: center; font-size: 10px;">';
+                                echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+                                echo '</div>';
+                            }
+                            echo '</div>';
+
+                            // Add logo notes if available
+                            if (!empty($position['logo_notes'])) {
+                                echo '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                echo 'Notes: ' . esc_html($position['logo_notes']);
+                                echo '</div>';
+                            }
+                        } elseif (isset($position['content_type']) && $position['content_type'] === 'logo' && !empty($position['logo_alternative'])) {
+                            // Show logo alternative when no file is uploaded
+                            echo '<div class="customization-logo-alternative" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                            echo '<strong>' . __('Logo Option:', 'wc-product-customizer') . '</strong> ';
+                            
+                            if ($position['logo_alternative'] === 'contact_later') {
+                                echo __('Logo to be provided later', 'wc-product-customizer');
+                            } elseif ($position['logo_alternative'] === 'already_have') {
+                                echo __('Logo already on file', 'wc-product-customizer');
+                            } else {
+                                echo esc_html(ucfirst(str_replace('_', ' ', $position['logo_alternative'])));
+                            }
+                            echo '</div>';
+                            
+                            // Add logo notes if available
+                            if (!empty($position['logo_notes'])) {
+                                echo '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                echo 'Notes: ' . esc_html($position['logo_notes']);
+                                echo '</div>';
+                            }
+                        } elseif (isset($position['content_type']) && $position['content_type'] === 'text') {
+                            // Show text content
+                            $text_lines = array();
+                            if (!empty($position['text_line_1'])) {
+                                $text_lines[] = $position['text_line_1'];
+                            }
+                            if (!empty($position['text_line_2'])) {
+                                $text_lines[] = $position['text_line_2'];
+                            }
+                            if (!empty($position['text_line_3'])) {
+                                $text_lines[] = $position['text_line_3'];
+                            }
+
+                            if (!empty($text_lines)) {
+                                echo '<div class="customization-text" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                echo '<strong>' . __('Text:', 'wc-product-customizer') . '</strong><br>';
+                                
+                                // Show individual text lines
+                                $line_number = 1;
+                                foreach ($text_lines as $line) {
+                                    if (!empty($line)) {
+                                        echo '<div style="margin-left: 10px; margin-top: 2px;">';
+                                        echo '<strong>Text Line ' . $line_number . ':</strong> "' . esc_html($line) . '"';
+                                        echo '</div>';
+                                        $line_number++;
+                                    }
+                                }
+                                
+                                // Show combined text
+                                echo '<div style="margin-left: 10px; margin-top: 5px; font-weight: bold; color: #333;">';
+                                echo '<strong>Combined:</strong> "' . esc_html(implode(' ', $text_lines)) . '"';
+                                echo '</div>';
+
+                                // Add font and color info
+                                $text_details = array();
+                                if (!empty($position['text_font'])) {
+                                    $text_details[] = ucfirst($position['text_font']) . ' font';
+                                }
+                                if (!empty($position['text_color'])) {
+                                    $text_details[] = ucfirst($position['text_color']) . ' color';
+                                }
+
+                                if (!empty($text_details)) {
+                                    echo '<div style="margin-left: 10px; margin-top: 3px; font-style: italic;">';
+                                    echo '(' . implode(', ', $text_details) . ')';
+                                    echo '</div>';
+                                }
+                                echo '</div>';
+                            }
+
+                            // Add text notes if available
+                            if (!empty($position['text_notes'])) {
+                                echo '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                echo 'Notes: ' . esc_html($position['text_notes']);
+                                echo '</div>';
+                            }
+                        }
+
+                        echo '</div>';
+                    }
+                } else {
+                    // Legacy single customization format
+                    $method = ucfirst($data['method'] ?? '');
+                    $content_type = ucfirst($data['content_type'] ?? '');
+
+                    echo '<div class="customization-type" style="font-weight: 600; color: #333;">' . esc_html($content_type . ' ' . $method) . '</div>';
+
+                    if (!empty($data['zones'])) {
+                        echo '<div class="customization-zones" style="font-size: 11px; color: #666; margin-top: 3px;">' . esc_html(implode(', ', $data['zones'] ?? array())) . '</div>';
+                    }
+
+                    // Show logo preview if it's a logo customization
+                    if (isset($data['content_type']) && $data['content_type'] === 'logo' && !empty($data['file_path'])) {
+                        echo '<div class="customization-logo-preview" style="margin-top: 5px;">';
+                        echo '<strong style="font-size: 11px;">' . __('Logo Preview:', 'wc-product-customizer') . '</strong><br>';
+
+                        // Get the file URL
+                        $upload_dir = wp_upload_dir();
+                        $file_url = $upload_dir['baseurl'] . '/customization-files/' . $data['file_path'];
+
+                        // Check if it's an image file
+                        $extension = strtolower(pathinfo($data['file_path'], PATHINFO_EXTENSION));
+                        $image_extensions = array('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp');
+
+                        if (in_array($extension, $image_extensions)) {
+                            echo '<img src="' . esc_url($file_url) . '" alt="' . esc_attr__('Customization Logo', 'wc-product-customizer') . '" style="max-width: 60px; max-height: 60px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">';
+                        } else {
+                            echo '<div style="background: #f0f0f0; padding: 5px; margin-top: 3px; border-radius: 3px; text-align: center; font-size: 10px;">';
+                            echo esc_html(strtoupper($extension)) . ' ' . __('File', 'wc-product-customizer');
+                            echo '</div>';
+                        }
+                        echo '</div>';
+
+                        // Add logo notes if available
+                        if (!empty($data['logo_notes'])) {
+                            echo '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                            echo 'Notes: ' . esc_html($data['logo_notes']);
+                            echo '</div>';
+                        }
+                    } elseif (isset($data['content_type']) && $data['content_type'] === 'text') {
+                        // Show text content
+                        $text_lines = array();
+                        if (!empty($data['text_line_1'])) {
+                            $text_lines[] = $data['text_line_1'];
+                        }
+                        if (!empty($data['text_line_2'])) {
+                            $text_lines[] = $data['text_line_2'];
+                        }
+                        if (!empty($data['text_line_3'])) {
+                            $text_lines[] = $data['text_line_3'];
+                        }
+
+                        if (!empty($text_lines)) {
+                            echo '<div class="customization-text" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                            echo '<strong>' . __('Text:', 'wc-product-customizer') . '</strong><br>';
+                            
+                            // Show individual text lines
+                            $line_number = 1;
+                            foreach ($text_lines as $line) {
+                                if (!empty($line)) {
+                                    echo '<div style="margin-left: 10px; margin-top: 2px;">';
+                                    echo '<strong>Text Line ' . $line_number . ':</strong> "' . esc_html($line) . '"';
+                                    echo '</div>';
+                                    $line_number++;
+                                }
+                            }
+                            
+                            // Show combined text
+                            echo '<div style="margin-left: 10px; margin-top: 5px; font-weight: bold; color: #333;">';
+                            echo '<strong>Combined:</strong> "' . esc_html(implode(' ', $text_lines)) . '"';
+                            echo '</div>';
+
+                            // Add font and color info
+                            $text_details = array();
+                            if (!empty($data['text_font'])) {
+                                $text_details[] = ucfirst($data['text_font']) . ' font';
+                            }
+                            if (!empty($data['text_color'])) {
+                                $text_details[] = ucfirst($data['text_color']) . ' color';
+                            }
+
+                            if (!empty($text_details)) {
+                                echo '<div style="margin-left: 10px; margin-top: 3px; font-style: italic;">';
+                                echo '(' . implode(', ', $text_details) . ')';
+                                echo '</div>';
+                            }
+                            echo '</div>';
+                        }
+
+                        // Add text notes if available
+                        if (!empty($data['text_notes'])) {
+                            echo '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                            echo 'Notes: ' . esc_html($data['text_notes']);
+                            echo '</div>';
+                        }
+                    }
+                }
+                ?>
+                <div style="margin-top: 10px;">
+                    <button type="button" class="button edit-customization-btn" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" data-product-id="<?php echo esc_attr($product_id); ?>" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 6px 12px; margin-right: 8px; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</button>
+                    <button type="button" class="button remove-customization-btn" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" style="background: #dc3545; color: white; border: 1px solid #dc3545; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Remove Customization</button>
+                </div>
             <?php else: ?>
                 <button type="button" class="button add-customization-btn" data-cart-key="<?php echo esc_attr($cart_item_key); ?>" data-product-id="<?php echo esc_attr($product_id); ?>" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Add logo to this item</button>
             <?php endif; ?>
@@ -945,7 +1470,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_cart_item_name_global($product_name, $cart_item, $cart_item_key) {
+    public function modify_cart_item_name_global($product_name, $cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
         
         // Check if product supports customization
@@ -981,7 +1507,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $content
      * @return string
      */
-    public function fix_escaped_html($content) {
+    public function fix_escaped_html($content)
+    {
         // Only process if we're on cart page or if content contains customization HTML
         if (!is_cart() && strpos($content, 'customization-actions') === false) {
             return $content;
@@ -1014,7 +1541,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_cart_item_thumbnail($thumbnail, $cart_item, $cart_item_key) {
+    public function modify_cart_item_thumbnail($thumbnail, $cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
         
         // Check if product supports customization
@@ -1066,7 +1594,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_cart_item_subtotal($subtotal, $cart_item, $cart_item_key) {
+    public function modify_cart_item_subtotal($subtotal, $cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
         
         // Check if product supports customization
@@ -1118,7 +1647,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $cart_item_key
      * @return string
      */
-    public function modify_widget_cart_item($quantity, $cart_item, $cart_item_key) {
+    public function modify_widget_cart_item($quantity, $cart_item, $cart_item_key)
+    {
         $product_id = $cart_item['product_id'];
         
         // Check if product supports customization
@@ -1165,7 +1695,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * Start output buffer to modify cart HTML
      */
-    public function start_cart_output_buffer() {
+    public function start_cart_output_buffer()
+    {
         if (is_cart()) {
             ob_start(array($this, 'modify_cart_html'));
         }
@@ -1174,7 +1705,8 @@ class WC_Product_Customizer_Cart_Integration {
     /**
      * End output buffer
      */
-    public function end_cart_output_buffer() {
+    public function end_cart_output_buffer()
+    {
         if (is_cart()) {
             ob_end_flush();
         }
@@ -1186,7 +1718,8 @@ class WC_Product_Customizer_Cart_Integration {
      * @param string $html
      * @return string
      */
-    public function modify_cart_html($html) {
+    public function modify_cart_html($html)
+    {
         if (!is_cart()) {
             return $html;
         }
@@ -1256,7 +1789,8 @@ class WC_Product_Customizer_Cart_Integration {
      * Add fallback JavaScript for theme compatibility
      * This ensures buttons appear even if theme doesn't support WooCommerce hooks
      */
-    public function add_cart_fallback_script() {
+    public function add_cart_fallback_script()
+    {
         // Only run on cart page
         if (!is_cart()) {
             return;
@@ -1285,6 +1819,12 @@ class WC_Product_Customizer_Cart_Integration {
         <script type="text/javascript">
         jQuery(document).ready(function($) {
             console.log('Customizer: Fallback script loaded for', <?php echo json_encode($customizable_items); ?>);
+
+                // Helper function to capitalize first letter
+                function capitalizeFirstLetter(string) {
+                    if (!string) return '';
+                    return string.charAt(0).toUpperCase() + string.slice(1);
+                }
             
             // Function to add buttons to cart items
             function addCustomizationButtons() {
@@ -1296,7 +1836,18 @@ class WC_Product_Customizer_Cart_Integration {
                 var hasCustomization = <?php echo $item['has_customization'] ? 'true' : 'false'; ?>;
                 var productName = '<?php echo esc_js($item['product_name']); ?>';
                 
-                console.log('Customizer: Processing item', cartKey, productId, hasCustomization, productName);
+                        // Get customization data
+                        var customizationData = null;
+                        <?php
+                        if ($item['has_customization']) {
+                            $cart_item = WC()->cart->get_cart_item($item['cart_key']);
+                            if ($cart_item && isset($cart_item['customization_data'])) {
+                                echo 'customizationData = ' . json_encode($cart_item['customization_data']) . ';';
+                            }
+                        }
+                        ?>
+
+                        console.log('Customizer: Processing item', cartKey, productId, hasCustomization, productName, customizationData);
                 
                 // More aggressive selectors for printspace theme
                 var selectors = [
@@ -1319,10 +1870,9 @@ class WC_Product_Customizer_Cart_Integration {
                     try {
                         $cartItem = $(selectors[i]);
                         if ($cartItem.length > 0) {
-                            console.log('Customizer: Found cart item with selector:', selectors[i]);
                             break;
                         }
-                    } catch(e) {
+                            } catch (e) {
                         console.log('Customizer: Selector failed:', selectors[i], e);
                     }
                 }
@@ -1346,19 +1896,272 @@ class WC_Product_Customizer_Cart_Integration {
                     console.log('Customizer: Adding buttons to cart item');
                     
                     var buttonHtml = '<div class="customization-actions" data-cart-key="' + cartKey + '" data-product-id="' + productId + '" style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #f0f0f0;">';
-                    
-                    // Generate customization URL
-                    var customizeUrl = '<?php echo home_url('/'); ?>?wc_customize=1&product_id=' + productId + '&cart_key=' + cartKey + '&return_url=' + encodeURIComponent('<?php echo wc_get_cart_url(); ?>');
-                    var editUrl = customizeUrl + '&edit=1';
+
+                            // Generate customization URL
+                            var customizeUrl = '<?php echo home_url('/'); ?>?wc_customize=1&product_id=' + productId + '&cart_key=' + cartKey + '&return_url=' + encodeURIComponent('<?php echo wc_get_cart_url(); ?>');
+                            var editUrl = customizeUrl + '&edit=1';
                     
                     if (hasCustomization) {
-                        buttonHtml += '<div style="margin-bottom: 8px; font-size: 12px; color: #666; font-weight: 500;">Customization Options:</div>';
-                        buttonHtml += '<a href="' + editUrl + '" class="button wc-customizer-edit-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 8px 16px; margin-right: 8px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</a>';
-                        buttonHtml += '<button type="button" class="button remove-customization-btn" data-cart-key="' + cartKey + '" style="background: #dc3545; color: white; border: 1px solid #dc3545; padding: 8px 16px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Remove Customization</button>';
+                                console.log('Customizer: Fallback script - hasCustomization is true, building details...');
+                                console.log('Customizer: customizationData received:', customizationData);
+                                console.log('Customizer: customizationData type:', typeof customizationData);
+                                console.log('Customizer: customizationData is array:', Array.isArray(customizationData));
+                                if (customizationData) {
+                                    console.log('Customizer: customizationData length:', customizationData.length);
+                                    console.log('Customizer: customizationData first item:', customizationData[0]);
+                                }
+                                buttonHtml += '<div style="margin-bottom: 8px; font-size: 12px; color: #666; font-weight: 500;">Customization Details:</div>';
+
+                                // Process customization data in JavaScript
+                                if (customizationData) {
+                                    console.log('Customizer: Processing customizationData...');
+                                    console.log('Customizer: customizationData[0]:', customizationData[0]);
+                                    console.log('Customizer: has zone_id property:', customizationData[0].hasOwnProperty('zone_id'));
+                                    console.log('Customizer: zone_id value:', customizationData[0].zone_id);
+                                    // Check if it's multiple positions (new format) or single customization (legacy)
+                                    if (Array.isArray(customizationData) && customizationData.length > 0 && customizationData[0].hasOwnProperty('zone_id')) {
+                                        console.log('Customizer: Processing as multiple positions format');
+                                        // Multiple positions format
+                                        customizationData.forEach(function(position, index) {
+                                            console.log('Customizer: Processing position', index, position);
+                                            buttonHtml += '<div class="position-customization" style="margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px;">';
+                                            buttonHtml += '<div class="customization-type" style="font-weight: 600; color: #333;">' + position.zone_name + ' - ' + capitalizeFirstLetter(position.content_type) + ' ' + capitalizeFirstLetter(position.method) + '</div>';
+
+                                            // Show logo preview if it's a logo customization
+                                            if (position.content_type === 'logo' && position.file_path) {
+                                                buttonHtml += '<div class="customization-logo-preview" style="margin-top: 5px;">';
+                                                buttonHtml += '<strong style="font-size: 11px;">Logo Preview:</strong><br>';
+
+                                                var uploadDir = '<?php echo wp_upload_dir()['baseurl']; ?>';
+                                                var fileUrl = uploadDir + '/customization-files/' + position.file_path;
+
+                                                var extension = position.file_path.split('.').pop().toLowerCase();
+                                                var imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+
+                                                if (imageExtensions.includes(extension)) {
+                                                    buttonHtml += '<img src="' + fileUrl + '" alt="Customization Logo" style="max-width: 60px; max-height: 60px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">';
                     } else {
-                        buttonHtml += '<a href="' + customizeUrl + '" class="button wc-customizer-add-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Add logo to this item</a>';
-                    }
-                    
+                                                    buttonHtml += '<div style="background: #f0f0f0; padding: 5px; margin-top: 3px; border-radius: 3px; text-align: center; font-size: 10px;">' + extension.toUpperCase() + ' File</div>';
+                                                }
+                                                buttonHtml += '</div>';
+
+                                        // Add logo notes if available
+                                        if (position.logo_notes && position.logo_notes.trim() !== '') {
+                                            console.log('Customizer: Adding logo notes:', position.logo_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + position.logo_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No logo notes found for position', index, 'value:', position.logo_notes);
+                                        }
+                                        
+                                        // Show logo alternative if present (even when file is uploaded)
+                                        if (position.logo_alternative && position.logo_alternative.trim() !== '') {
+                                            console.log('Customizer: Adding logo alternative:', position.logo_alternative);
+                                            buttonHtml += '<div class="customization-logo-alternative" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                            buttonHtml += '<strong>Logo Option:</strong> ';
+                                            
+                                            if (position.logo_alternative === 'contact_later') {
+                                                buttonHtml += 'Logo to be provided later';
+                                            } else if (position.logo_alternative === 'already_have') {
+                                                buttonHtml += 'Logo already on file';
+                                            } else {
+                                                buttonHtml += capitalizeFirstLetter(position.logo_alternative.replace('_', ' '));
+                                            }
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No logo alternative found for position', index, 'value:', position.logo_alternative);
+                                        }
+                                    } else if (position.content_type === 'logo' && position.logo_alternative && position.logo_alternative.trim() !== '') {
+                                        // Show logo alternative when no file is uploaded
+                                        buttonHtml += '<div class="customization-logo-alternative" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                        buttonHtml += '<strong>Logo Option:</strong> ';
+                                        
+                                        if (position.logo_alternative === 'contact_later') {
+                                            buttonHtml += 'Logo to be provided later';
+                                        } else if (position.logo_alternative === 'already_have') {
+                                            buttonHtml += 'Logo already on file';
+                                        } else {
+                                            buttonHtml += capitalizeFirstLetter(position.logo_alternative.replace('_', ' '));
+                                        }
+                                        buttonHtml += '</div>';
+                                        
+                                        // Add logo notes if available
+                                        if (position.logo_notes && position.logo_notes.trim() !== '') {
+                                            console.log('Customizer: Adding logo notes for alternative:', position.logo_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + position.logo_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No logo notes found for alternative position', index, 'value:', position.logo_notes);
+                                        }
+                                            } else if (position.content_type === 'text') {
+                                        // Show text content
+                                        var textLines = [];
+                                        if (position.text_line_1 && position.text_line_1.trim() !== '') textLines.push(position.text_line_1);
+                                        if (position.text_line_2 && position.text_line_2.trim() !== '') textLines.push(position.text_line_2);
+                                        if (position.text_line_3 && position.text_line_3.trim() !== '') textLines.push(position.text_line_3);
+
+                                                if (textLines.length > 0) {
+                                                    buttonHtml += '<div class="customization-text" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                                    buttonHtml += '<strong>Text:</strong><br>';
+                                                    
+                                                    // Show individual text lines
+                                                    for (var i = 0; i < textLines.length; i++) {
+                                                        buttonHtml += '<div style="margin-left: 10px; margin-top: 2px;">';
+                                                        buttonHtml += '<strong>Text Line ' + (i + 1) + ':</strong> "' + textLines[i] + '"';
+                                                        buttonHtml += '</div>';
+                                                    }
+                                                    
+                                                    // Show combined text
+                                                    buttonHtml += '<div style="margin-left: 10px; margin-top: 5px; font-weight: bold; color: #333;">';
+                                                    buttonHtml += '<strong>Combined:</strong> "' + textLines.join(' ') + '"';
+                                                    buttonHtml += '</div>';
+
+                                                    var textDetails = [];
+                                                    if (position.text_font) textDetails.push(capitalizeFirstLetter(position.text_font) + ' font');
+                                                    if (position.text_color) textDetails.push(capitalizeFirstLetter(position.text_color) + ' color');
+
+                                                    if (textDetails.length > 0) {
+                                                        buttonHtml += '<div style="margin-left: 10px; margin-top: 3px; font-style: italic;">';
+                                                        buttonHtml += '(' + textDetails.join(', ') + ')';
+                                                        buttonHtml += '</div>';
+                                                    }
+                                                    buttonHtml += '</div>';
+                                                }
+
+                                        // Add text notes if available
+                                        if (position.text_notes && position.text_notes.trim() !== '') {
+                                            console.log('Customizer: Adding text notes:', position.text_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + position.text_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No text notes found for position', index, 'value:', position.text_notes);
+                                        }
+                                            }
+
+                                            buttonHtml += '</div>';
+                                        });
+                                    } else {
+                                        console.log('Customizer: Processing as legacy single customization format');
+                                        console.log('Customizer: Legacy data:', customizationData);
+                                        // Legacy single customization format
+                                        var method = capitalizeFirstLetter(customizationData.method || '');
+                                        var contentType = capitalizeFirstLetter(customizationData.content_type || '');
+
+                                        buttonHtml += '<div class="customization-type" style="font-weight: 600; color: #333;">' + contentType + ' ' + method + '</div>';
+
+                                        if (customizationData.zones && customizationData.zones.length > 0) {
+                                            buttonHtml += '<div class="customization-zones" style="font-size: 11px; color: #666; margin-top: 3px;">' + customizationData.zones.join(', ') + '</div>';
+                                        }
+
+                                        // Show logo preview if it's a logo customization
+                                        if (customizationData.content_type === 'logo' && customizationData.file_path) {
+                                            buttonHtml += '<div class="customization-logo-preview" style="margin-top: 5px;">';
+                                            buttonHtml += '<strong style="font-size: 11px;">Logo Preview:</strong><br>';
+
+                                            var uploadDir = '<?php echo wp_upload_dir()['baseurl']; ?>';
+                                            var fileUrl = uploadDir + '/customization-files/' + customizationData.file_path;
+
+                                            var extension = customizationData.file_path.split('.').pop().toLowerCase();
+                                            var imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+
+                                            if (imageExtensions.includes(extension)) {
+                                                buttonHtml += '<img src="' + fileUrl + '" alt="Customization Logo" style="max-width: 60px; max-height: 60px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">';
+                                            } else {
+                                                buttonHtml += '<div style="background: #f0f0f0; padding: 5px; margin-top: 3px; border-radius: 3px; text-align: center; font-size: 10px;">' + extension.toUpperCase() + ' File</div>';
+                                            }
+                                            buttonHtml += '</div>';
+
+                                        // Add logo notes if available
+                                        if (customizationData.logo_notes && customizationData.logo_notes.trim() !== '') {
+                                            console.log('Customizer: Adding legacy logo notes:', customizationData.logo_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + customizationData.logo_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No legacy logo notes found, value:', customizationData.logo_notes);
+                                        }
+                                    } else if (customizationData.content_type === 'logo' && customizationData.logo_alternative && customizationData.logo_alternative.trim() !== '') {
+                                        // Show logo alternative when no file is uploaded (legacy format)
+                                        buttonHtml += '<div class="customization-logo-alternative" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                        buttonHtml += '<strong>Logo Option:</strong> ';
+                                        
+                                        if (customizationData.logo_alternative === 'contact_later') {
+                                            buttonHtml += 'Logo to be provided later';
+                                        } else if (customizationData.logo_alternative === 'already_have') {
+                                            buttonHtml += 'Logo already on file';
+                                        } else {
+                                            buttonHtml += capitalizeFirstLetter(customizationData.logo_alternative.replace('_', ' '));
+                                        }
+                                        buttonHtml += '</div>';
+                                        
+                                        // Add logo notes if available
+                                        if (customizationData.logo_notes && customizationData.logo_notes.trim() !== '') {
+                                            console.log('Customizer: Adding legacy logo notes for alternative:', customizationData.logo_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + customizationData.logo_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No legacy logo notes found for alternative, value:', customizationData.logo_notes);
+                                        }
+                                        } else if (customizationData.content_type === 'text') {
+                                        // Show text content
+                                        var textLines = [];
+                                        if (customizationData.text_line_1 && customizationData.text_line_1.trim() !== '') textLines.push(customizationData.text_line_1);
+                                        if (customizationData.text_line_2 && customizationData.text_line_2.trim() !== '') textLines.push(customizationData.text_line_2);
+                                        if (customizationData.text_line_3 && customizationData.text_line_3.trim() !== '') textLines.push(customizationData.text_line_3);
+
+                                            if (textLines.length > 0) {
+                                                buttonHtml += '<div class="customization-text" style="margin-top: 5px; font-size: 11px; color: #666;">';
+                                                buttonHtml += '<strong>Text:</strong><br>';
+                                                
+                                                // Show individual text lines
+                                                for (var i = 0; i < textLines.length; i++) {
+                                                    buttonHtml += '<div style="margin-left: 10px; margin-top: 2px;">';
+                                                    buttonHtml += '<strong>Text Line ' + (i + 1) + ':</strong> "' + textLines[i] + '"';
+                                                    buttonHtml += '</div>';
+                                                }
+                                                
+                                                // Show combined text
+                                                buttonHtml += '<div style="margin-left: 10px; margin-top: 5px; font-weight: bold; color: #333;">';
+                                                buttonHtml += '<strong>Combined:</strong> "' + textLines.join(' ') + '"';
+                                                buttonHtml += '</div>';
+
+                                                var textDetails = [];
+                                                if (customizationData.text_font) textDetails.push(capitalizeFirstLetter(customizationData.text_font) + ' font');
+                                                if (customizationData.text_color) textDetails.push(capitalizeFirstLetter(customizationData.text_color) + ' color');
+
+                                                if (textDetails.length > 0) {
+                                                    buttonHtml += '<div style="margin-left: 10px; margin-top: 3px; font-style: italic;">';
+                                                    buttonHtml += '(' + textDetails.join(', ') + ')';
+                                                    buttonHtml += '</div>';
+                                                }
+                                                buttonHtml += '</div>';
+                                            }
+
+                                        // Add text notes if available
+                                        if (customizationData.text_notes && customizationData.text_notes.trim() !== '') {
+                                            console.log('Customizer: Adding legacy text notes:', customizationData.text_notes);
+                                            buttonHtml += '<div class="customization-notes" style="margin-top: 3px; font-size: 10px; color: #888; font-style: italic;">';
+                                            buttonHtml += 'Notes: ' + customizationData.text_notes;
+                                            buttonHtml += '</div>';
+                                        } else {
+                                            console.log('Customizer: No legacy text notes found, value:', customizationData.text_notes);
+                                        }
+                                        }
+                                    }
+                                }
+
+                                buttonHtml += '<div style="margin-top: 10px;">';
+                                buttonHtml += '<a href="' + editUrl + '" class="button wc-customizer-edit-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 6px 12px; margin-right: 8px; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Edit Customization</a>';
+                                buttonHtml += '<button type="button" class="button remove-customization-btn" data-cart-key="' + cartKey + '" style="background: #dc3545; color: white; border: 1px solid #dc3545; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Remove Customization</button>';
+                                buttonHtml += '</div>';
+                            } else {
+                                buttonHtml += '<a href="' + customizeUrl + '" class="button wc-customizer-add-link" style="background: #007cba; color: white; border: 1px solid #007cba; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s ease;">Add logo to this item</a>';
+                            }
+
                     buttonHtml += '</div>';
                     
                     // Try to find the product details cell (usually the second cell)
@@ -1459,7 +2262,6 @@ class WC_Product_Customizer_Cart_Integration {
             
             // Clean up any raw HTML that appears
             function cleanupRawHTML() {
-                console.log('Customizer: Cleaning up raw HTML...');
                 
                 // Find and replace any raw HTML customization actions
                 $('*').contents().filter(function() {
@@ -1467,7 +2269,6 @@ class WC_Product_Customizer_Cart_Integration {
                 }).each(function() {
                     var text = $(this).text();
                     if (text.indexOf('customization-actions') !== -1 && text.indexOf('<div') !== -1) {
-                        console.log('Customizer: Found raw HTML, replacing...');
                         
                         // Extract the HTML from the text
                         var htmlMatch = text.match(/<div class="customization-actions"[^>]*>.*?<\/div>/);
@@ -1485,8 +2286,6 @@ class WC_Product_Customizer_Cart_Integration {
                 }).each(function() {
                     var text = $(this).text();
                     if (text.indexOf('&lt;div class="customization-actions"') !== -1) {
-                        console.log('Customizer: Found escaped HTML, converting...');
-                        
                         // Decode HTML entities
                         var decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
                         
@@ -1514,7 +2313,6 @@ class WC_Product_Customizer_Cart_Integration {
             
             // Specific cleanup for mini-cart and popups
             function cleanupMiniCart() {
-                console.log('Customizer: Cleaning up mini-cart...');
                 
                 // Target common mini-cart selectors
                 var selectors = [
@@ -1537,8 +2335,6 @@ class WC_Product_Customizer_Cart_Integration {
                         }).each(function() {
                             var text = $(this).text();
                             if (text.indexOf('customization-actions') !== -1 && text.indexOf('<div') !== -1) {
-                                console.log('Customizer: Found raw HTML in mini-cart, replacing...');
-                                
                                 // Extract and replace the HTML
                                 var htmlMatch = text.match(/<div class="customization-actions"[^>]*>.*?<\/div>/);
                                 if (htmlMatch) {
@@ -1601,5 +2397,4 @@ class WC_Product_Customizer_Cart_Integration {
         </script>
         <?php
     }
-
 }

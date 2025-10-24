@@ -27,7 +27,7 @@ class WC_Product_Customizer_Database {
      *
      * @var string
      */
-    private static $db_version = '1.4.0';
+    private static $db_version = '1.5.0';
 
     /**
      * Get instance
@@ -65,6 +65,12 @@ class WC_Product_Customizer_Database {
                 }
                 if (version_compare($installed_version, '1.3.0', '<')) {
                     self::migrate_to_1_3_0();
+                }
+                if (version_compare($installed_version, '1.4.0', '<')) {
+                    self::migrate_to_1_4_0();
+                }
+                if (version_compare($installed_version, '1.5.0', '<')) {
+                    self::migrate_to_1_5_0();
                 }
             } else {
                 // Fresh installation
@@ -131,7 +137,8 @@ class WC_Product_Customizer_Database {
             order_id int(11) NOT NULL,
             cart_item_key varchar(32) NOT NULL,
             product_id int(11) NOT NULL,
-            zone_ids text,
+            zone_id int(11) NOT NULL,
+            position_name varchar(100),
             method varchar(50),
             content_type varchar(20),
             file_path varchar(255),
@@ -144,8 +151,26 @@ class WC_Product_Customizer_Database {
             text_notes text,
             logo_alternative varchar(50),
             logo_notes text,
-            setup_fee decimal(10,2) DEFAULT 0.00,
             application_fee decimal(10,2) DEFAULT 0.00,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY order_id (order_id),
+            KEY product_id (product_id),
+            KEY cart_item_key (cart_item_key),
+            KEY zone_id (zone_id)
+        ) $charset_collate;";
+
+        dbDelta($sql);
+
+        // Customization Order Groups table
+        $table_name = $wpdb->prefix . 'wc_customization_order_groups';
+        $sql = "CREATE TABLE $table_name (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            order_id int(11) NOT NULL,
+            cart_item_key varchar(32) NOT NULL,
+            product_id int(11) NOT NULL,
+            group_setup_fee decimal(10,2) DEFAULT 0.00,
+            total_application_fee decimal(10,2) DEFAULT 0.00,
             total_cost decimal(10,2) DEFAULT 0.00,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -366,6 +391,71 @@ class WC_Product_Customizer_Database {
     }
 
     /**
+     * Migrate to version 1.4.0
+     */
+    public static function migrate_to_1_4_0() {
+        global $wpdb;
+        
+        // Add new columns to customization_orders table
+        $table_name = $wpdb->prefix . 'wc_customization_orders';
+        
+        // Check if columns exist before adding them
+        $columns_to_add = array(
+            'zone_id' => 'int(11) NOT NULL DEFAULT 0',
+            'position_name' => 'varchar(100)',
+            'text_line_1' => 'varchar(255)',
+            'text_line_2' => 'varchar(255)',
+            'text_line_3' => 'varchar(255)',
+            'text_font' => 'varchar(50)',
+            'text_color' => 'varchar(20)',
+            'text_notes' => 'text',
+            'logo_alternative' => 'varchar(50)',
+            'logo_notes' => 'text',
+            'application_fee' => 'decimal(10,2) DEFAULT 0.00'
+        );
+        
+        foreach ($columns_to_add as $column_name => $column_definition) {
+            $column_exists = $wpdb->get_results($wpdb->prepare(
+                "SHOW COLUMNS FROM $table_name LIKE %s",
+                $column_name
+            ));
+            
+            if (empty($column_exists)) {
+                $wpdb->query("ALTER TABLE $table_name ADD COLUMN $column_name $column_definition");
+            }
+        }
+        
+        // Create order groups table
+        $groups_table = $wpdb->prefix . 'wc_customization_order_groups';
+        $sql = "CREATE TABLE IF NOT EXISTS $groups_table (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            order_id int(11) NOT NULL,
+            cart_item_key varchar(32) NOT NULL,
+            product_id int(11) NOT NULL,
+            group_setup_fee decimal(10,2) DEFAULT 0.00,
+            total_application_fee decimal(10,2) DEFAULT 0.00,
+            total_cost decimal(10,2) DEFAULT 0.00,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY order_id (order_id),
+            KEY product_id (product_id),
+            KEY cart_item_key (cart_item_key)
+        ) {$wpdb->get_charset_collate()};";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+
+    /**
+     * Migrate to version 1.5.0
+     */
+    public static function migrate_to_1_5_0() {
+        // This migration is handled by migrate_to_1_4_0
+        // Version 1.5.0 uses the same table structure as 1.4.0
+        // The migration is already complete
+    }
+
+    /**
      * Insert default data
      */
     private static function insert_default_data() {
@@ -513,7 +603,8 @@ class WC_Product_Customizer_Database {
                 'order_id' => $data['order_id'],
                 'cart_item_key' => $data['cart_item_key'],
                 'product_id' => $data['product_id'],
-                'zone_ids' => maybe_serialize($data['zone_ids']),
+                'zone_id' => $data['zone_id'],
+                'position_name' => $data['position_name'],
                 'method' => $data['method'],
                 'content_type' => $data['content_type'],
                 'file_path' => $data['file_path'],
@@ -526,11 +617,30 @@ class WC_Product_Customizer_Database {
                 'text_notes' => $data['text_notes'],
                 'logo_alternative' => $data['logo_alternative'],
                 'logo_notes' => $data['logo_notes'],
-                'setup_fee' => $data['setup_fee'],
-                'application_fee' => $data['application_fee'],
+                'application_fee' => $data['application_fee']
+            ),
+            array('%d', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f')
+        );
+        
+        return $result ? $wpdb->insert_id : false;
+    }
+
+    public function save_customization_order_group($data) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wc_customization_order_groups';
+        
+        $result = $wpdb->insert(
+            $table_name,
+            array(
+                'order_id' => $data['order_id'],
+                'cart_item_key' => $data['cart_item_key'],
+                'product_id' => $data['product_id'],
+                'group_setup_fee' => $data['group_setup_fee'],
+                'total_application_fee' => $data['total_application_fee'],
                 'total_cost' => $data['total_cost']
             ),
-            array('%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%f')
+            array('%d', '%s', '%d', '%f', '%f', '%f')
         );
         
         return $result ? $wpdb->insert_id : false;
@@ -1235,6 +1345,67 @@ class WC_Product_Customizer_Database {
         ));
         
         return is_wp_error($categories) ? array() : $categories;
+    }
+
+    /**
+     * Get customization data for order
+     *
+     * @param int $order_id
+     * @return array
+     */
+    public function get_customization_data_for_order($order_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wc_customization_orders';
+        
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE order_id = %d ORDER BY created_at ASC",
+            $order_id
+        ));
+        
+        return $results ? $results : array();
+    }
+
+    /**
+     * Get customization positions for cart item
+     *
+     * @param int $order_id
+     * @param string $cart_item_key
+     * @return array
+     */
+    public function get_customization_positions_for_cart_item($order_id, $cart_item_key) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wc_customization_orders';
+        
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE order_id = %d AND cart_item_key = %s ORDER BY created_at ASC",
+            $order_id,
+            $cart_item_key
+        ));
+        
+        return $results ? $results : array();
+    }
+
+    /**
+     * Get customization group data for cart item
+     *
+     * @param int $order_id
+     * @param string $cart_item_key
+     * @return object|null
+     */
+    public function get_customization_group_for_cart_item($order_id, $cart_item_key) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'wc_customization_order_groups';
+        
+        $result = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE order_id = %d AND cart_item_key = %s",
+            $order_id,
+            $cart_item_key
+        ));
+        
+        return $result;
     }
 
     /**

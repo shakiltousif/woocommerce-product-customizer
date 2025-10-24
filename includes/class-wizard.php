@@ -393,14 +393,22 @@ class WC_Product_Customizer_Wizard {
         // Filter zones based on product compatibility if needed
         $available_zones = array();
         foreach ($zones as $zone) {
+            // Ensure all fields are properly sanitized and never null
+            $zone_name = $zone->name ?? 'Unnamed Zone';
+            $zone_description = $zone->description ?? '';
+            $zone_group = $zone->zone_group ?? '';
+            $zone_methods = $zone->methods_available ?? '';
+            $zone_charge = $zone->zone_charge ?? 0;
+            $zone_thumbnail = $zone->thumbnail_url ?? '';
+            
             $available_zones[] = array(
-                'id' => $zone->id,
-                'name' => $zone->name,
-                'group' => $zone->zone_group,
-                'methods' => explode(',', $zone->methods_available),
-                'charge' => floatval($zone->zone_charge),
-                'thumbnail_url' => $zone->thumbnail_url,
-                'description' => $zone->description
+                'id' => intval($zone->id),
+                'name' => sanitize_text_field($zone_name),
+                'group' => sanitize_text_field($zone_group),
+                'methods' => array_filter(explode(',', $zone_methods)),
+                'charge' => floatval($zone_charge),
+                'thumbnail_url' => esc_url_raw($zone_thumbnail),
+                'description' => sanitize_textarea_field($zone_description)
             );
         }
         
@@ -604,18 +612,18 @@ class WC_Product_Customizer_Wizard {
         if (!empty($zone['thumbnail_url'])) {
             $thumbnail_url = $zone['thumbnail_url'];
         } else {
-            $thumbnail_url = WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'])) . '.svg';
+            $thumbnail_url = WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'] ?? 'default')) . '.svg';
         }
         ?>
-        <div class="zone-card" data-zone-id="<?php echo esc_attr($zone['id']); ?>" data-zone-name="<?php echo esc_attr($zone['name']); ?>" title="<?php echo esc_attr($zone['description']); ?>">
+        <div class="zone-card" data-zone-id="<?php echo esc_attr($zone['id']); ?>" data-zone-name="<?php echo esc_attr($zone['name'] ?? ''); ?>" title="<?php echo esc_attr($zone['description'] ?? ''); ?>">
             <div class="zone-image">
                 <img src="<?php echo esc_url($thumbnail_url); ?>" 
-                     alt="<?php echo esc_attr($zone['name']); ?>"
-                     onerror="this.src='<?php echo esc_url(WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'])) . '.svg'); ?>'">
+                     alt="<?php echo esc_attr($zone['name'] ?? 'Unnamed Zone'); ?>"
+                     onerror="this.src='<?php echo esc_url(WC_PRODUCT_CUSTOMIZER_PLUGIN_URL . 'assets/images/zones/' . strtolower(str_replace(' ', '-', $zone['name'] ?? 'default')) . '.svg'); ?>'">
             </div>
-            <h4><?php echo esc_html($zone['name']); ?></h4>
+            <h4><?php echo esc_html($zone['name'] ?? 'Unnamed Zone'); ?></h4>
             <?php if (!empty($zone['description'])): ?>
-                <p class="zone-description"><?php echo esc_html($zone['description']); ?></p>
+                <p class="zone-description"><?php echo esc_html($zone['description'] ?? ''); ?></p>
             <?php endif; ?>
             <div class="zone-availability">
                 <?php if (in_array('print', $zone['methods'])): ?>
